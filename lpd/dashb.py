@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import numpy as np
 
 # ------------------ PAGE CONFIG ------------------
 st.set_page_config(page_title="Learning Path Dashboard", layout="wide")
@@ -70,6 +71,42 @@ overall_gauge = go.Figure(go.Indicator(
 ))
 st.plotly_chart(overall_gauge, use_container_width=True)
 
-# ------------------ 4. DATA TABLE ------------------
+# ------------------ 4. DYNAMIC WEEKLY PROGRESS CHART ------------------
+st.subheader(f"📅 Weekly Progress Trend — {selected_skill}")
+
+# Simulated weekly data (based on skill progress)
+np.random.seed(hash(selected_skill) % 100000)  # consistent random data per skill
+weeks = ["Week 1", "Week 2", "Week 3", "Week 4", "Week 5"]
+base = selected_data["Progress"] - 30
+weekly_progress = np.clip(base + np.cumsum(np.random.randint(0, 10, size=len(weeks))), 0, 100)
+
+fig = go.Figure()
+
+fig.add_trace(go.Scatter(
+    x=weeks,
+    y=weekly_progress,
+    mode='lines+markers',
+    line=dict(color='mediumseagreen', width=4, shape='spline'),
+    fill='tozeroy',
+    fillcolor='rgba(60,179,113,0.2)',
+    marker=dict(size=10, color='lightgreen', line=dict(width=2, color='green')),
+    hovertemplate='<b>%{x}</b><br>Progress: %{y}%<extra></extra>'
+))
+
+fig.update_layout(
+    title=f"✨ {selected_skill} Weekly Growth Trend",
+    xaxis_title="Week",
+    yaxis_title="Progress (%)",
+    template="plotly_dark",
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(0,0,0,0)",
+    font=dict(size=14),
+    height=400,
+    margin=dict(l=40, r=40, t=60, b=40),
+)
+
+st.plotly_chart(fig, use_container_width=True)
+
+# ------------------ 5. DATA TABLE ------------------
 st.subheader("📊 Detailed Learning Data")
 st.dataframe(df, use_container_width=True)
