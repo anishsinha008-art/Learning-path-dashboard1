@@ -9,7 +9,7 @@ import plotly.graph_objects as go
 # ---------------------------------------------
 st.set_page_config(
     page_title="Learning Path Dashboard",
-    page_icon="🚀",
+    page_icon="📚",
     layout="wide"
 )
 
@@ -34,7 +34,7 @@ st.sidebar.info("💡 Tip: Keep learning every day to boost your completion rate
 # ---------------------------------------------
 # 📊 MAIN DASHBOARD
 # ---------------------------------------------
-st.title("🚀 Learning Path Dashboard")
+st.title("📚 Learning Path Dashboard")
 st.markdown("Visualize your learning journey and skill progress in one place.")
 
 col1, col2 = st.columns(2)
