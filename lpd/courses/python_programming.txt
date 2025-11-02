@@ -1,0 +1,6 @@
+courses/
+├── python programming.txt
+├── data structures & algorithms.txt
+├── operating systems.txt
+├── machine learning.txt
+└── ...
