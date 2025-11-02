@@ -1,6 +1,4 @@
-courses/
-├── python programming.txt
-├── data structures & algorithms.txt
-├── operating systems.txt
-├── machine learning.txt
-└── ...
+1. Introduction
+2. Basics
+3. Advanced Topics
+4. Projects
