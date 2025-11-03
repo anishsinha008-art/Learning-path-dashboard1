@@ -7,15 +7,16 @@ import os
 # ------------------ PAGE CONFIG ------------------
 st.set_page_config(page_title="CSE Learning Path Dashboard", layout="wide")
 
+# ------------------ INITIAL STATES ------------------
+if "menu_open" not in st.session_state:
+    st.session_state.menu_open = False
+if "active_section" not in st.session_state:
+    st.session_state.active_section = "Home"
+
 # ------------------ CUSTOM CSS ------------------
 st.markdown("""
 <style>
-.menu-container {
-    position: fixed;
-    top: 20px;
-    left: 20px;
-    z-index: 9999;
-}
+/* --- Slide-out menu styling --- */
 .sidebar-menu {
     position: fixed;
     top: 60px;
@@ -29,6 +30,7 @@ st.markdown("""
     transition: transform 0.3s ease;
     transform: translateX(-100%);
     border-radius: 0 10px 10px 0;
+    z-index: 9999;
 }
 .sidebar-menu.show {
     transform: translateX(0);
@@ -38,46 +40,61 @@ st.markdown("""
     border-bottom: 1px solid #333;
     padding-bottom: 10px;
 }
-.menu-item {
-    margin: 15px 0;
+.menu-button {
+    background: none;
+    border: none;
+    color: white;
+    width: 100%;
+    text-align: left;
     font-size: 16px;
+    padding: 8px;
     cursor: pointer;
 }
-.menu-item:hover {
+.menu-button:hover {
     color: #00BFFF;
+}
+
+/* --- Fade + slide animation container --- */
+.section-container {
+    animation: fadeSlide 0.4s ease-in-out;
+}
+@keyframes fadeSlide {
+    0% {opacity: 0; transform: translateX(40px);}
+    100% {opacity: 1; transform: translateX(0);}
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ------------------ MENU TOGGLE ------------------
-if "menu_open" not in st.session_state:
-    st.session_state.menu_open = False
-
-# Hamburger menu button
+# ------------------ MENU BUTTON ------------------
 col1, col2 = st.columns([0.05, 0.95])
 with col1:
     if st.button("☰"):
         st.session_state.menu_open = not st.session_state.menu_open
 
-# ------------------ MENU BAR CONTENT ------------------
+# ------------------ MENU CONTENT ------------------
 menu_class = "sidebar-menu show" if st.session_state.menu_open else "sidebar-menu"
-st.markdown(f"""
-<div class="{menu_class}">
-    <h3>📚 Menu</h3>
-    <div class="menu-item" onclick="window.location.reload()">🏠 Home</div>
-    <div class="menu-item">🎯 Skill Progress</div>
-    <div class="menu-item">📘 Course Completion</div>
-    <div class="menu-item">🌍 Overall Progress</div>
-    <div class="menu-item">📅 Weekly Trend</div>
-    <div class="menu-item">📂 Course Chapters</div>
-    <div class="menu-item">📊 Detailed Data</div>
-</div>
-""", unsafe_allow_html=True)
+st.markdown(f'<div class="{menu_class}"><h3>📚 Dashboard Menu</h3>', unsafe_allow_html=True)
 
-# ------------------ DASHBOARD CONTENT ------------------
-st.title("💻 CSE Learning Path Dashboard")
-st.markdown("Track your Computer Science skills, visualize growth, and open your course chapters interactively.")
+menu_options = [
+    "Home",
+    "Skill Progress",
+    "Course Completion",
+    "Overall Progress",
+    "Weekly Trend",
+    "Course Chapters",
+    "Detailed Data"
+]
 
+for option in menu_options:
+    if st.session_state.menu_open:
+        if st.button(option, key=option, use_container_width=True):
+            st.session_state.active_section = option
+            st.session_state.menu_open = False
+            st.rerun()
+
+st.markdown("</div>", unsafe_allow_html=True)
+
+# ------------------ DATA ------------------
 skills_data = {
     "Skill": [
         "Python Programming", "Data Structures & Algorithms", "Operating Systems", "Database Management Systems",
@@ -91,93 +108,120 @@ skills_data = {
 }
 df = pd.DataFrame(skills_data)
 
+# ------------------ SELECTED SKILL ------------------
 selected_skill = st.selectbox("Select a CSE skill to view details:", df["Skill"])
 selected_data = df[df["Skill"] == selected_skill].iloc[0]
 
-# ---- 1. Skill Progress Gauge ----
-st.subheader(f"🎯 Skill Progress: {selected_skill}")
-gauge = go.Figure(go.Indicator(
-    mode="gauge+number",
-    value=selected_data["Progress"],
-    title={'text': f"{selected_skill} Progress"},
-    gauge={
-        'axis': {'range': [0, 100]},
-        'bar': {'color': "mediumseagreen"},
-        'steps': [
-            {'range': [0, 50], 'color': "#ffcccc"},
-            {'range': [50, 80], 'color': "#fff3cd"},
-            {'range': [80, 100], 'color': "#d4edda"}
-        ]
-    }
-))
-st.plotly_chart(gauge, use_container_width=True)
+# ------------------ MAIN CONTENT ------------------
+st.title("💻 CSE Learning Path Dashboard")
+st.markdown("Track your Computer Science skills, visualize growth, and open your course chapters interactively.")
 
-# ---- 2. Course Completion ----
-st.subheader("📘 Course Completion Overview")
-for _, row in df.iterrows():
-    percent = int((row["Courses Completed"] / row["Total Courses"]) * 100)
-    st.markdown(f"**{row['Skill']}** — {row['Courses Completed']} / {row['Total Courses']} courses completed ({percent}%)")
-    st.progress(percent / 100)
+# Wrap section in animated div
+st.markdown('<div class="section-container">', unsafe_allow_html=True)
 
-# ---- 3. Overall Gauge ----
-st.subheader("🌍 Overall Learning Progress")
-overall_progress = df["Progress"].mean()
-overall_gauge = go.Figure(go.Indicator(
-    mode="gauge+number",
-    value=overall_progress,
-    title={'text': "Average Skill Progress"},
-    gauge={
-        'axis': {'range': [0, 100]},
-        'bar': {'color': "royalblue"},
-        'steps': [
-            {'range': [0, 50], 'color': "#ffcccc"},
-            {'range': [50, 80], 'color': "#fff3cd"},
-            {'range': [80, 100], 'color': "#d4edda"}
-        ]
-    }
-))
-st.plotly_chart(overall_gauge, use_container_width=True)
+# ---- HOME ----
+if st.session_state.active_section == "Home":
+    st.subheader("🏠 Welcome to the Dashboard")
+    st.markdown("""
+    This dashboard helps you:
+    - Visualize your progress in each CSE domain  
+    - Track weekly learning growth  
+    - Access course chapters  
+    - View total completion data  
+    Use the ☰ menu on the top-left to explore sections.
+    """)
 
-# ---- 4. Weekly Progress ----
-st.subheader(f"📅 Weekly Progress Trend — {selected_skill}")
-np.random.seed(hash(selected_skill) % 100000)
-weeks = ["Week 1", "Week 2", "Week 3", "Week 4", "Week 5"]
-base = selected_data["Progress"] - 30
-weekly_progress = np.clip(base + np.cumsum(np.random.randint(0, 10, size=len(weeks))), 0, 100)
+# ---- SKILL PROGRESS ----
+elif st.session_state.active_section == "Skill Progress":
+    st.subheader(f"🎯 Skill Progress: {selected_skill}")
+    gauge = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=selected_data["Progress"],
+        title={'text': f"{selected_skill} Progress"},
+        gauge={
+            'axis': {'range': [0, 100]},
+            'bar': {'color': "mediumseagreen"},
+            'steps': [
+                {'range': [0, 50], 'color': "#ffcccc"},
+                {'range': [50, 80], 'color': "#fff3cd"},
+                {'range': [80, 100], 'color': "#d4edda"}
+            ]
+        }
+    ))
+    st.plotly_chart(gauge, use_container_width=True)
 
-fig = go.Figure()
-fig.add_trace(go.Scatter(
-    x=weeks,
-    y=weekly_progress,
-    mode='lines+markers',
-    line=dict(color='mediumseagreen', width=4, shape='spline'),
-    fill='tozeroy',
-    fillcolor='rgba(60,179,113,0.2)',
-    marker=dict(size=10, color='lightgreen', line=dict(width=2, color='green')),
-))
-fig.update_layout(
-    title=f"✨ {selected_skill} Weekly Growth Trend",
-    xaxis_title="Week",
-    yaxis_title="Progress (%)",
-    template="plotly_dark",
-    paper_bgcolor="rgba(0,0,0,0)",
-    plot_bgcolor="rgba(0,0,0,0)",
-    font=dict(size=14),
-    height=400,
-)
-st.plotly_chart(fig, use_container_width=True)
+# ---- COURSE COMPLETION ----
+elif st.session_state.active_section == "Course Completion":
+    st.subheader("📘 Course Completion Overview")
+    for _, row in df.iterrows():
+        percent = int((row["Courses Completed"] / row["Total Courses"]) * 100)
+        st.markdown(f"**{row['Skill']}** — {row['Courses Completed']} / {row['Total Courses']} courses completed ({percent}%)")
+        st.progress(percent / 100)
 
-# ---- 5. Course Chapters ----
-st.subheader(f"📂 Chapters for {selected_skill}")
-filename = f"courses/{selected_skill.lower().replace(' ', '_').replace('&', 'and')}.txt"
+# ---- OVERALL PROGRESS ----
+elif st.session_state.active_section == "Overall Progress":
+    st.subheader("🌍 Overall Learning Progress")
+    overall_progress = df["Progress"].mean()
+    overall_gauge = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=overall_progress,
+        title={'text': "Average Skill Progress"},
+        gauge={
+            'axis': {'range': [0, 100]},
+            'bar': {'color': "royalblue"},
+            'steps': [
+                {'range': [0, 50], 'color': "#ffcccc"},
+                {'range': [50, 80], 'color': "#fff3cd"},
+                {'range': [80, 100], 'color': "#d4edda"}
+            ]
+        }
+    ))
+    st.plotly_chart(overall_gauge, use_container_width=True)
 
-if os.path.exists(filename):
-    with open(filename, "r", encoding="utf-8") as f:
-        content = f.read()
-    st.text_area("Course Chapters", content, height=200)
-else:
-    st.warning(f"No course file found for **{selected_skill}**.\n\nCreate a file named `{filename}` to add chapters.")
+# ---- WEEKLY TREND ----
+elif st.session_state.active_section == "Weekly Trend":
+    st.subheader(f"📅 Weekly Progress Trend — {selected_skill}")
+    np.random.seed(hash(selected_skill) % 100000)
+    weeks = ["Week 1", "Week 2", "Week 3", "Week 4", "Week 5"]
+    base = selected_data["Progress"] - 30
+    weekly_progress = np.clip(base + np.cumsum(np.random.randint(0, 10, size=len(weeks))), 0, 100)
 
-# ---- 6. Data Table ----
-st.subheader("📊 Detailed Learning Data")
-st.dataframe(df, use_container_width=True)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=weeks,
+        y=weekly_progress,
+        mode='lines+markers',
+        line=dict(color='mediumseagreen', width=4, shape='spline'),
+        fill='tozeroy',
+        fillcolor='rgba(60,179,113,0.2)',
+        marker=dict(size=10, color='lightgreen', line=dict(width=2, color='green')),
+    ))
+    fig.update_layout(
+        title=f"✨ {selected_skill} Weekly Growth Trend",
+        xaxis_title="Week",
+        yaxis_title="Progress (%)",
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(size=14),
+        height=400,
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+# ---- COURSE CHAPTERS ----
+elif st.session_state.active_section == "Course Chapters":
+    st.subheader(f"📂 Chapters for {selected_skill}")
+    filename = f"courses/{selected_skill.lower().replace(' ', '_').replace('&', 'and')}.txt"
+    if os.path.exists(filename):
+        with open(filename, "r", encoding="utf-8") as f:
+            content = f.read()
+        st.text_area("Course Chapters", content, height=200)
+    else:
+        st.warning(f"No course file found for **{selected_skill}**.\n\nCreate a file named `{filename}` to add chapters.")
+
+# ---- DETAILED DATA ----
+elif st.session_state.active_section == "Detailed Data":
+    st.subheader("📊 Detailed Learning Data")
+    st.dataframe(df, use_container_width=True)
+
+st.markdown('</div>', unsafe_allow_html=True)
