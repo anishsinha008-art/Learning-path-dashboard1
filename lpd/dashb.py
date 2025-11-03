@@ -54,13 +54,49 @@ with st.sidebar:
     ))
     st.plotly_chart(gauge, use_container_width=True)
 
-# ------------------ COURSE COMPLETION ------------------
+# ------------------ COURSE COMPLETION OVERVIEW (MENU STYLE) ------------------
 st.subheader("📘 Course Completion Overview")
-for _, row in df.iterrows():
-    st.markdown(f"**{row['Skill']}** — {row['Courses Completed']} / {row['Total Courses']} courses completed ({row['Completion %']}%)")
-    st.progress(row["Completion %"] / 100)
 
-# ------------------ OVERALL PROGRESS GAUGE (FIXED & CENTERED) ------------------
+# State for expanding menu
+if "show_all_courses" not in st.session_state:
+    st.session_state.show_all_courses = False
+
+# Display first 3 or all courses
+display_df = df if st.session_state.show_all_courses else df.head(3)
+
+# Create menu-style layout
+cols = st.columns(len(display_df))
+for i, (_, row) in enumerate(display_df.iterrows()):
+    with cols[i]:
+        st.markdown(
+            f"""
+            <div style="background-color:#f7f9fc;
+                        padding:15px;
+                        border-radius:12px;
+                        text-align:center;
+                        box-shadow:0 4px 8px rgba(0,0,0,0.05);
+                        transition: all 0.2s ease-in-out;">
+                <h4 style="color:#2c3e50; font-size:16px;">{row['Skill']}</h4>
+                <p style="margin:4px 0; font-size:14px;">{row['Courses Completed']} / {row['Total Courses']} Courses</p>
+                <div style="height:8px; background-color:#e9ecef; border-radius:5px;">
+                    <div style="width:{row['Completion %']}%;
+                                height:8px;
+                                background-color:#4CAF50;
+                                border-radius:5px;"></div>
+                </div>
+                <p style="margin-top:5px; color:#4CAF50; font-size:13px;">{row['Completion %']}%</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+# Toggle button
+btn_label = "📂 Show More Courses" if not st.session_state.show_all_courses else "📁 Show Less"
+if st.button(btn_label):
+    st.session_state.show_all_courses = not st.session_state.show_all_courses
+    st.rerun()
+
+# ------------------ OVERALL PROGRESS GAUGE ------------------
 st.subheader("🌍 Overall Learning Progress")
 
 overall_progress = round(df["Progress"].mean(), 1)
@@ -82,11 +118,7 @@ overall_gauge = go.Figure(go.Indicator(
             {'range': [50, 80], 'color': "#fff3cd"},
             {'range': [80, 100], 'color': "#d4edda"}
         ],
-        'threshold': {
-            'line': {'color': "blue", 'width': 4},
-            'thickness': 0.75,
-            'value': overall_progress
-        }
+        'threshold': {'line': {'color': "blue", 'width': 4}, 'thickness': 0.75, 'value': overall_progress}
     }
 ))
 
