@@ -43,21 +43,23 @@ selected_data = df[df["Skill"] == selected_skill].iloc[0]
 # ------------------ 1. INDIVIDUAL GAUGE ------------------
 st.subheader(f"🎯 Skill Progress: {selected_skill}")
 
-gauge = go.Figure(go.Indicator(
-    mode="gauge+number",
-    value=selected_data["Progress"],
-    title={'text': f"{selected_skill} Progress"},
-    gauge={
-        'axis': {'range': [0, 100]},
-        'bar': {'color': "mediumseagreen"},
-        'steps': [
-            {'range': [0, 50], 'color': "#ffcccc"},
-            {'range': [50, 80], 'color': "#fff3cd"},
-            {'range': [80, 100], 'color': "#d4edda"}
-        ]
-    }
-))
-st.plotly_chart(gauge, use_container_width=True)
+col1, col2 = st.columns([1, 2])
+with col1:
+    gauge = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=selected_data["Progress"],
+        title={'text': f"{selected_skill} Progress"},
+        gauge={
+            'axis': {'range': [0, 100]},
+            'bar': {'color': "mediumseagreen"},
+            'steps': [
+                {'range': [0, 50], 'color': "#ffcccc"},
+                {'range': [50, 80], 'color': "#fff3cd"},
+                {'range': [80, 100], 'color': "#d4edda"}
+            ]
+        }
+    ))
+    st.plotly_chart(gauge, use_container_width=True)
 
 # ------------------ 2. COURSE COMPLETION ------------------
 st.subheader("📘 Course Completion Overview")
