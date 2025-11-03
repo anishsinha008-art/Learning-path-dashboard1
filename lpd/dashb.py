@@ -11,6 +11,15 @@ st.set_page_config(page_title="CSE Learning Path Dashboard", layout="wide")
 st.title("💻 CSE Learning Path Dashboard")
 st.markdown("Track your Computer Science skills, visualize growth, and open your course chapters interactively.")
 
+# ------------------ THEME TOGGLE ------------------
+theme = st.sidebar.radio("🎨 Choose Theme", ["Dark", "Light"])
+if theme == "Light":
+    bg_color = "white"
+    text_color = "black"
+else:
+    bg_color = "rgba(0,0,0,0)"
+    text_color = "white"
+
 # ------------------ DATA ------------------
 skills_data = {
     "Skill": [
@@ -41,23 +50,24 @@ selected_skill = st.sidebar.selectbox("Select a CSE skill to view details:", df[
 selected_data = df[df["Skill"] == selected_skill].iloc[0]
 
 # ------------------ 1. INDIVIDUAL GAUGE ------------------
-with st.sidebar:
-    st.markdown("### 🎯 Skill Progress")
-    gauge = go.Figure(go.Indicator(
-        mode="gauge+number",
-        value=selected_data["Progress"],
-        title={'text': f"{selected_skill} Progress"},
-        gauge={
-            'axis': {'range': [0, 100]},
-            'bar': {'color': "mediumseagreen"},
-            'steps': [
-                {'range': [0, 50], 'color': "#ffcccc"},
-                {'range': [50, 80], 'color': "#fff3cd"},
-                {'range': [80, 100], 'color': "#d4edda"}
-            ]
-        }
-    ))
-    st.plotly_chart(gauge, use_container_width=True)
+st.subheader(f"🎯 Skill Progress: {selected_skill}")
+
+gauge = go.Figure(go.Indicator(
+    mode="gauge+number",
+    value=selected_data["Progress"],
+    title={'text': f"{selected_skill} Progress"},
+    gauge={
+        'axis': {'range': [0, 100]},
+        'bar': {'color': "mediumseagreen"},
+        'steps': [
+            {'range': [0, 50], 'color': "#ffcccc"},
+            {'range': [50, 80], 'color': "#fff3cd"},
+            {'range': [80, 100], 'color': "#d4edda"}
+        ]
+    }
+))
+st.plotly_chart(gauge, use_container_width=True)
+
 # ------------------ 2. COURSE COMPLETION ------------------
 st.subheader("📘 Course Completion Overview")
 
@@ -108,28 +118,43 @@ fig.update_layout(
     title=f"✨ {selected_skill} Weekly Growth Trend",
     xaxis_title="Week",
     yaxis_title="Progress (%)",
-    template="plotly_dark",
-    paper_bgcolor="rgba(0,0,0,0)",
-    plot_bgcolor="rgba(0,0,0,0)",
-    font=dict(size=14),
+    template="plotly_dark" if theme == "Dark" else "plotly_white",
+    paper_bgcolor=bg_color,
+    plot_bgcolor=bg_color,
+    font=dict(size=14, color=text_color),
     height=400,
 )
 st.plotly_chart(fig, use_container_width=True)
 
-# ------------------ 5. COURSE FILE DISPLAY ------------------
+# ------------------ 5. COURSE FILE DISPLAY & UPLOAD ------------------
 st.subheader(f"📂 Chapters for {selected_skill}")
 
 # Convert skill name to lowercase filename
 filename = f"courses/{selected_skill.lower()}.txt"
 filename = filename.replace(" ", "_").replace("&", "and")
 
+# Upload new file feature
+uploaded_file = st.file_uploader(f"Upload or update chapters for {selected_skill}", type="txt")
+if uploaded_file:
+    os.makedirs("courses", exist_ok=True)
+    with open(filename, "wb") as f:
+        f.write(uploaded_file.getbuffer())
+    st.success(f"✅ File uploaded successfully for {selected_skill}!")
+
+# Display file content
 if os.path.exists(filename):
     with open(filename, "r", encoding="utf-8") as f:
         content = f.read()
     st.text_area("Course Chapters", content, height=200)
 else:
-    st.warning(f"No course file found for **{selected_skill}**.\n\nCreate a file named `{filename}` to add chapters.")
+    st.warning(f"No course file found for **{selected_skill}**.\n\nCreate or upload a file named `{filename}` to add chapters.")
 
-# ------------------ 6. DATA TABLE ------------------
+# ------------------ 6. TOP SKILLS INSIGHT ------------------
+st.subheader("🏆 Top 3 Performing Skills")
+
+top_skills = df.nlargest(3, "Progress")[["Skill", "Progress"]]
+st.table(top_skills)
+
+# ------------------ 7. DATA TABLE ------------------
 st.subheader("📊 Detailed Learning Data")
 st.dataframe(df, use_container_width=True)
