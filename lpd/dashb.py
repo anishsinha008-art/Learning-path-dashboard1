@@ -41,10 +41,8 @@ selected_skill = st.sidebar.selectbox("Select a CSE skill to view details:", df[
 selected_data = df[df["Skill"] == selected_skill].iloc[0]
 
 # ------------------ 1. INDIVIDUAL GAUGE ------------------
-st.subheader(f"🎯 Skill Progress: {selected_skill}")
-
-col1, col2 = st.columns([1, 2])
-with col1:
+with st.sidebar:
+    st.markdown("### 🎯 Skill Progress")
     gauge = go.Figure(go.Indicator(
         mode="gauge+number",
         value=selected_data["Progress"],
@@ -60,7 +58,6 @@ with col1:
         }
     ))
     st.plotly_chart(gauge, use_container_width=True)
-
 # ------------------ 2. COURSE COMPLETION ------------------
 st.subheader("📘 Course Completion Overview")
 
