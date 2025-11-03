@@ -60,25 +60,48 @@ for _, row in df.iterrows():
     st.markdown(f"**{row['Skill']}** — {row['Courses Completed']} / {row['Total Courses']} courses completed ({row['Completion %']}%)")
     st.progress(row["Completion %"] / 100)
 
-# ------------------ OVERALL PROGRESS GAUGE ------------------
+# ------------------ OVERALL PROGRESS GAUGE (FIXED & CENTERED) ------------------
 st.subheader("🌍 Overall Learning Progress")
-overall_progress = df["Progress"].mean()
+
+overall_progress = round(df["Progress"].mean(), 1)
 
 overall_gauge = go.Figure(go.Indicator(
-    mode="gauge+number",
+    mode="gauge+number+delta",
     value=overall_progress,
-    title={'text': "Average Skill Progress"},
+    number={'suffix': "%", 'font': {'size': 40, 'color': "royalblue"}},
+    delta={'reference': 75, 'increasing': {'color': "limegreen"}, 'decreasing': {'color': "crimson"}},
+    title={'text': "Average Skill Progress", 'font': {'size': 20}},
     gauge={
-        'axis': {'range': [0, 100]},
+        'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "darkgray"},
         'bar': {'color': "royalblue"},
+        'bgcolor': "white",
+        'borderwidth': 2,
+        'bordercolor': "gray",
         'steps': [
             {'range': [0, 50], 'color': "#ffcccc"},
             {'range': [50, 80], 'color': "#fff3cd"},
             {'range': [80, 100], 'color': "#d4edda"}
-        ]
+        ],
+        'threshold': {
+            'line': {'color': "blue", 'width': 4},
+            'thickness': 0.75,
+            'value': overall_progress
+        }
     }
 ))
-st.plotly_chart(overall_gauge, use_container_width=True)
+
+overall_gauge.update_layout(
+    margin=dict(l=20, r=20, t=40, b=20),
+    height=400,
+    paper_bgcolor="rgba(0,0,0,0)",
+    font=dict(size=14)
+)
+
+col1, col2, col3 = st.columns([0.2, 0.6, 0.2])
+with col2:
+    st.plotly_chart(overall_gauge, use_container_width=True)
+
+st.caption("Average progress across all CSE skills.")
 
 # ------------------ WEEKLY TREND ------------------
 st.subheader(f"📅 Weekly Progress Trend — {selected_skill}")
