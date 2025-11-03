@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
-import os
 
 # ------------------ PAGE CONFIG ------------------
 st.set_page_config(page_title="CSE Learning Path Dashboard", layout="wide")
@@ -13,20 +12,20 @@ if "menu_open" not in st.session_state:
 if "active_section" not in st.session_state:
     st.session_state.active_section = "Home"
 
-# ------------------ MENU BUTTON ------------------
-col1, col2 = st.columns([0.05, 0.95])
-with col1:
-    if st.button("☰", key="menu_toggle"):
-        st.session_state.menu_open = not st.session_state.menu_open
-        st.rerun()
+# ------------------ MENU TOGGLE BUTTON ------------------
+st.markdown("<div style='position: fixed; top: 10px; left: 15px; z-index: 1000;'>", unsafe_allow_html=True)
+if st.button("☰", key="menu_toggle"):
+    st.session_state.menu_open = not st.session_state.menu_open
+    st.rerun()
+st.markdown("</div>", unsafe_allow_html=True)
 
 # ------------------ CUSTOM CSS ------------------
 st.markdown("""
 <style>
 /* === MENU STYLING === */
 .menu-wrapper {
-    position: absolute;
-    top: 70px;
+    position: fixed;
+    top: 60px;
     left: 15px;
     z-index: 999;
 }
@@ -64,20 +63,20 @@ st.markdown("""
     font-weight: bold;
 }
 
-/* === MENU EXPANSION ANIMATION === */
+/* === MENU ANIMATION === */
 @keyframes expandRight {
     0% { opacity: 0; transform: scaleX(0); }
     100% { opacity: 1; transform: scaleX(1); }
 }
 
-/* === DASHBOARD CONTENT SHIFT === */
-.dashboard-content {
-    transition: margin-left 0.4s ease;
-    margin-left: 0;
+/* === DASHBOARD SHIFT RIGHT === */
+.dashboard-container {
+    transition: transform 0.4s ease-in-out;
+    transform: translateX(0);
 }
 .dashboard-shifted {
-    margin-left: 260px; /* shift when menu is open */
-    transition: margin-left 0.4s ease;
+    transform: translateX(270px);  /* Shift right when menu opens */
+    transition: transform 0.4s ease-in-out;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -93,17 +92,17 @@ if st.session_state.menu_open:
         btn_class = "menu-option active" if st.session_state.active_section == section else "menu-option"
         if st.button(section, key=section, use_container_width=False):
             st.session_state.active_section = section
-            st.session_state.menu_open = False  # optional auto-close
+            st.session_state.menu_open = False  # auto-close after selecting
             st.rerun()
     st.markdown('</div></div>', unsafe_allow_html=True)
 
 # ------------------ DASHBOARD CONTENT ------------------
-container_class = "dashboard-shifted" if st.session_state.menu_open else "dashboard-content"
+container_class = "dashboard-shifted" if st.session_state.menu_open else "dashboard-container"
 st.markdown(f'<div class="{container_class}">', unsafe_allow_html=True)
 
 st.title("🚀 CSE Learning Path Dashboard")
 
-# Example dashboard content
+# --- Dashboard summary stats ---
 col1, col2, col3 = st.columns(3)
 with col1:
     st.metric("Courses Enrolled", 8)
@@ -112,6 +111,7 @@ with col2:
 with col3:
     st.metric("Weekly Progress (%)", "74%")
 
+# --- Gauge chart ---
 progress = go.Figure(go.Indicator(
     mode="gauge+number",
     value=74,
@@ -120,6 +120,7 @@ progress = go.Figure(go.Indicator(
 ))
 st.plotly_chart(progress, use_container_width=True)
 
+# --- Course Completion Table ---
 st.markdown("### 📘 Course Completion Overview")
 df = pd.DataFrame({
     "Course": ["Python", "Data Structures", "AI Fundamentals", "Web Dev", "Cybersecurity"],
@@ -128,4 +129,3 @@ df = pd.DataFrame({
 st.dataframe(df, use_container_width=True)
 
 st.markdown('</div>', unsafe_allow_html=True)
-
