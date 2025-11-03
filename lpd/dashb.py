@@ -16,17 +16,17 @@ if "active_section" not in st.session_state:
 # ------------------ CUSTOM CSS ------------------
 st.markdown("""
 <style>
-/* --- Animated expanding menu (top-left) --- */
+/* --- Top-left attached expanding menu --- */
 .menu-wrapper {
-    position: absolute;
-    top: 70px;
+    position: fixed;
+    top: 15px;
     left: 15px;
-    z-index: 999;
+    z-index: 1000;
 }
 
 .menu-container {
     background-color: #1E1E1E;
-    padding: 12px 20px;
+    padding: 10px 18px;
     border-radius: 10px;
     box-shadow: 2px 2px 10px rgba(0,0,0,0.4);
     color: white;
@@ -44,7 +44,7 @@ st.markdown("""
     border: none;
     color: white;
     text-align: center;
-    font-size: 16px;
+    font-size: 15px;
     cursor: pointer;
     transition: color 0.2s, transform 0.2s;
 }
