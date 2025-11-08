@@ -14,6 +14,8 @@ if "show_more_courses" not in st.session_state:
     st.session_state.show_more_courses = False
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
+if "show_chat" not in st.session_state:
+    st.session_state.show_chat = False
 
 # ------------------ SIDEBAR MENU ------------------
 with st.sidebar:
@@ -105,89 +107,131 @@ except ImportError:
     st.warning("Matplotlib not found — showing plain table instead.")
     st.dataframe(df, use_container_width=True)
 
-# ------------------ CHATBOT SECTION ------------------
-st.markdown("---")
-st.subheader("🤖 AI Chat Assistant")
-st.markdown("<p style='color:gray;'>Ask anything — from coding advice to motivation or study tips!</p>", unsafe_allow_html=True)
+# ------------------ FLOATING CHATBOT SECTION ------------------
+chat_toggle = st.button("💬 Open AI Assistant")
 
-# Quick reply buttons
-cols = st.columns(4)
-if cols[0].button("💪 Motivate Me"):
-    st.session_state.chat_history.append(("user", "motivate me"))
-if cols[1].button("🐍 Python Tip"):
-    st.session_state.chat_history.append(("user", "python tip"))
-if cols[2].button("🧠 AI Info"):
-    st.session_state.chat_history.append(("user", "tell me about AI"))
-if cols[3].button("🌐 Web Help"):
-    st.session_state.chat_history.append(("user", "help with web dev"))
+if chat_toggle:
+    st.session_state.show_chat = not st.session_state.show_chat
 
-user_input = st.chat_input("Type your message here...")
+if st.session_state.show_chat:
+    # --- Chat Styles ---
+    st.markdown("""
+    <style>
+    .chat-float {
+        position: fixed;
+        bottom: 30px;
+        right: 30px;
+        width: 360px;
+        background: rgba(250,250,250,0.98);
+        border-radius: 16px;
+        box-shadow: 0px 4px 20px rgba(0,0,0,0.25);
+        z-index: 9999;
+        padding: 0;
+        overflow: hidden;
+    }
+    .chat-header {
+        font-weight: 600;
+        font-size: 18px;
+        color: white;
+        background: linear-gradient(135deg, #4A00E0, #8E2DE2);
+        padding: 10px;
+        text-align: center;
+    }
+    .chat-container {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 10px;
+        background: #F7F9FB;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    .chat-bubble-user {
+        background: linear-gradient(135deg, #4CAF50, #81C784);
+        color: white;
+        padding: 10px 14px;
+        border-radius: 18px;
+        margin: 6px 0;
+        max-width: 75%;
+        text-align: right;
+        align-self: flex-end;
+        box-shadow: 0px 3px 8px rgba(0,0,0,0.15);
+    }
+    .chat-bubble-bot {
+        background: linear-gradient(135deg, #2C3E50, #4CA1AF);
+        color: white;
+        padding: 10px 14px;
+        border-radius: 18px;
+        margin: 6px 0;
+        max-width: 75%;
+        text-align: left;
+        align-self: flex-start;
+        box-shadow: 0px 3px 8px rgba(0,0,0,0.15);
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-# --- Chatbot logic ---
-def get_bot_response(message, history):
-    message = message.lower()
+    # --- Chat Box Structure ---
+    st.markdown("<div class='chat-float'><div class='chat-header'>🤖 AI Learning Assistant</div>", unsafe_allow_html=True)
+    st.markdown("<div class='chat-container'>", unsafe_allow_html=True)
 
-    motivational_quotes = [
-        "🌟 Keep pushing forward — every line of code takes you closer to mastery!",
-        "🔥 You’re improving every day — trust the process!",
-        "💻 Code. Debug. Learn. Repeat. That’s how legends are made!",
-        "🚀 Success is just consistent effort over time."
-    ]
+    for sender, msg in st.session_state.chat_history:
+        if sender == "user":
+            st.markdown(f"<div class='chat-bubble-user'><b>You:</b> {msg}</div>", unsafe_allow_html=True)
+        else:
+            st.markdown(f"<div class='chat-bubble-bot'><b>AI:</b> {msg}</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
-    python_tips = [
-        "🐍 Use list comprehensions instead of loops — it's cleaner and faster!",
-        "💡 Learn how to use the `zip()` and `enumerate()` functions — they make life easier!",
-        "📘 Master Python’s standard library — it saves tons of time!"
-    ]
+    # --- Chat Input ---
+    user_input = st.text_input("Type your message here...", key="chat_input")
 
-    if "python" in message:
-        return np.random.choice(python_tips)
-    elif "c++" in message or "cpp" in message:
-        return "💻 C++ builds logic — practice memory and pointer problems daily!"
-    elif "web" in message:
-        return "🌐 Start with HTML & CSS, then learn JavaScript. Build your first portfolio website!"
-    elif "ai" in message or "machine learning" in message:
-        return "🤖 AI is fascinating! Start with Python, then learn NumPy, Pandas, and scikit-learn."
-    elif "motivate" in message or "inspire" in message:
-        return np.random.choice(motivational_quotes)
-    elif "thanks" in message or "thank you" in message:
-        return "😊 You’re very welcome! Keep going, you’re doing amazing!"
-    elif "joke" in message:
-        return "😂 Why do programmers prefer dark mode? Because light attracts bugs!"
-    elif "progress" in message:
-        return "📊 You’re progressing well! Remember to revise weekly."
-    elif "how are you" in message:
-        return "😄 I’m great, just processing data and cheering you on!"
-    elif "hello" in message or "hi" in message:
-        return "👋 Hey there! Ready to learn something new today?"
-    else:
-        # Contextual follow-up
-        if history and "ai" in history[-1][1].lower():
-            return "🧠 Building AI models requires patience — start simple, understand the math first."
-        elif history and "python" in history[-1][1].lower():
-            return "🐍 Once you’re comfortable with basics, try projects like calculators or quiz apps!"
+    # --- Chatbot Logic ---
+    def get_bot_response(message, history):
+        message = message.lower()
+        motivational_quotes = [
+            "🌟 Keep pushing forward — every line of code takes you closer to mastery!",
+            "🔥 You’re improving every day — trust the process!",
+            "💻 Code. Debug. Learn. Repeat. That’s how legends are made!",
+            "🚀 Success is just consistent effort over time."
+        ]
+        python_tips = [
+            "🐍 Use list comprehensions instead of loops — it's cleaner and faster!",
+            "💡 Learn to use `zip()` and `enumerate()` — they simplify your logic!",
+            "📘 Explore Python’s standard library — it saves tons of time!"
+        ]
+        if "python" in message:
+            return np.random.choice(python_tips)
+        elif "c++" in message or "cpp" in message:
+            return "💻 Practice logic-building problems with pointers and memory handling!"
+        elif "web" in message:
+            return "🌐 Start with HTML & CSS, then JavaScript. Create a simple website first!"
+        elif "ai" in message or "machine" in message:
+            return "🤖 Start with Python, then learn libraries like NumPy, Pandas, and scikit-learn."
+        elif "motivate" in message:
+            return np.random.choice(motivational_quotes)
+        elif "hello" in message or "hi" in message:
+            return "👋 Hey there! Ready to learn something exciting today?"
+        elif "progress" in message:
+            return "📊 You’re improving fast! Keep learning one topic at a time!"
+        elif "thanks" in message:
+            return "😊 You're welcome! Stay consistent and keep growing!"
         else:
             return np.random.choice([
-                "🤔 Interesting! Could you explain more?",
-                "💬 What topic are you focusing on today?",
-                "🚀 I love your curiosity — keep exploring!",
-                "✨ Want me to suggest a daily coding challenge?"
+                "🤔 Interesting thought! Tell me more.",
+                "💬 Which course are you focusing on today?",
+                "🚀 I love your curiosity — want a coding challenge?",
+                "✨ You’re doing great — what topic should we explore next?"
             ])
 
-# --- Process input ---
-if user_input:
-    st.session_state.chat_history.append(("user", user_input))
-    with st.spinner("Assistant is typing..."):
-        time.sleep(np.random.uniform(0.6, 1.2))  # Typing delay
-        bot_reply = get_bot_response(user_input, st.session_state.chat_history)
-        st.session_state.chat_history.append(("bot", bot_reply))
+    if user_input:
+        st.session_state.chat_history.append(("user", user_input))
+        with st.spinner("AI is typing..."):
+            time.sleep(np.random.uniform(0.6, 1.2))
+            bot_reply = get_bot_response(user_input, st.session_state.chat_history)
+            st.session_state.chat_history.append(("bot", bot_reply))
+        st.experimental_rerun()
 
-# --- Display chat ---
-for sender, msg in st.session_state.chat_history:
-    if sender == "user":
-        st.markdown(f"<div style='background:#DCF8C6; padding:10px; border-radius:10px; margin:5px 0; text-align:right'><b>You:</b> {msg}</div>", unsafe_allow_html=True)
-    else:
-        st.markdown(f"<div style='background:#E9E9EB; padding:10px; border-radius:10px; margin:5px 0'><b>Assistant:</b> {msg}</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
 # ------------------ FOOTER ------------------
 st.markdown("---")
