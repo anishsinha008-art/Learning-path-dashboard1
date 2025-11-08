@@ -185,9 +185,32 @@ if user_input:
 # --- Display chat ---
 for sender, msg in st.session_state.chat_history:
     if sender == "user":
-        st.markdown(f"<div style='background:#DCF8C6; padding:10px; border-radius:10px; margin:5px 0; text-align:right'><b>You:</b> {msg}</div>", unsafe_allow_html=True)
+        st.markdown(f"""
+            <div style='
+                background-color:#1b5e20; 
+                color:white; 
+                padding:10px; 
+                border-radius:10px; 
+                margin:5px 0; 
+                text-align:right;
+                box-shadow: 0px 2px 5px rgba(0,0,0,0.3);
+            '>
+                <b>You:</b> {msg}
+            </div>
+        """, unsafe_allow_html=True)
     else:
-        st.markdown(f"<div style='background:#E9E9EB; padding:10px; border-radius:10px; margin:5px 0'><b>Assistant:</b> {msg}</div>", unsafe_allow_html=True)
+        st.markdown(f"""
+            <div style='
+                background-color:#2e7d32; 
+                color:white; 
+                padding:10px; 
+                border-radius:10px; 
+                margin:5px 0; 
+                box-shadow: 0px 2px 5px rgba(0,0,0,0.3);
+            '>
+                <b>Assistant:</b> {msg}
+            </div>
+        """, unsafe_allow_html=True)
 
 # ------------------ FOOTER ------------------
 st.markdown("---")
