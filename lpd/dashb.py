@@ -176,7 +176,13 @@ course_data = {
 }
 
 df = pd.DataFrame(course_data)
-st.dataframe(df.style.background_gradient(cmap="Greens"), use_container_width=True)
+
+# ✅ Safe Fallback for Gradient
+try:
+    st.dataframe(df.style.background_gradient(cmap="Greens"), use_container_width=True)
+except ImportError:
+    st.warning("Matplotlib not found — showing plain table instead.")
+    st.dataframe(df, use_container_width=True)
 
 # ------------------ INSPIRATION QUOTE ------------------
 st.markdown("### 💬 Daily Motivation")
@@ -212,13 +218,12 @@ def get_bot_response(message):
     for key in responses:
         if key in message:
             return responses[key]
-    # Default generic reply
     return random.choice([
         "That's interesting! Tell me more 🤔",
         "I'm here to help you learn and grow 🚀",
         "Can you elaborate a bit more?",
         "Sounds like you’re making progress! 💪",
-        "Hmm… let’s explore that topic together."
+        "Hmm… let's explore that topic together."
     ])
 
 # Handle chat interaction
