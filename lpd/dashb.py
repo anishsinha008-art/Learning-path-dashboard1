@@ -1,188 +1,108 @@
+# futuristic_dashboard.py
+# Run with: streamlit run futuristic_dashboard.py
+
 import streamlit as st
-import plotly.graph_objects as go
-import json
-import os
-import streamlit_ace as ace
-from io import StringIO
-import contextlib
+import time
+import random
 
 # ------------------ PAGE CONFIG ------------------
-st.set_page_config(page_title="CSE Learning Path 2.0", layout="wide")
+st.set_page_config(page_title="Cyber Learning Dashboard", layout="wide")
 
-# ------------------ STYLE ------------------
+# ------------------ CUSTOM CSS ------------------
 st.markdown("""
     <style>
-    body {
-        background-color: #0e1117;
-        color: #e0e0e0;
-        font-family: 'Inter', sans-serif;
-    }
-    .block-container {
-        padding-top: 1rem;
-        padding-bottom: 1rem;
-    }
-    .stSlider > div > div > div {
-        background: linear-gradient(90deg, #00b7ff, #0077ff);
-    }
-    .course-card {
-        background: #1b1f27;
-        border-radius: 12px;
-        padding: 20px;
-        box-shadow: 0px 4px 15px rgba(0, 183, 255, 0.15);
-        transition: 0.3s;
-    }
-    .course-card:hover {
-        box-shadow: 0px 4px 25px rgba(0, 183, 255, 0.4);
-        transform: scale(1.03);
-    }
-    .sidebar-title {
-        font-size: 24px;
-        font-weight: bold;
-        color: #00b7ff;
-        margin-bottom: 20px;
-    }
+        body {
+            background-color: #020617;
+            color: #00e5ff;
+        }
+        .title {
+            text-align: center;
+            font-size: 40px;
+            font-weight: 700;
+            color: #00e5ff;
+            text-shadow: 0 0 15px #00e5ff;
+            margin-bottom: 20px;
+        }
+        .course-card {
+            background: rgba(0, 229, 255, 0.05);
+            border: 1px solid #00e5ff33;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 0 15px #00e5ff22;
+            transition: 0.3s ease;
+        }
+        .course-card:hover {
+            transform: scale(1.02);
+            box-shadow: 0 0 25px #00e5ff44;
+        }
+        .course-title {
+            color: #00e5ff;
+            font-size: 22px;
+            font-weight: 600;
+            text-align: center;
+        }
+        .progress-container {
+            text-align: center;
+            color: white;
+        }
+        .stProgress > div > div > div > div {
+            background-color: #00e5ff !important;
+        }
+        .add-button {
+            background-color: #00e5ff;
+            color: #000;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: bold;
+            border: none;
+        }
+        .add-button:hover {
+            background-color: #00ffff;
+            color: #000;
+        }
     </style>
 """, unsafe_allow_html=True)
 
-# ------------------ DATA ------------------
-courses = [
-    "Python Programming", "C Programming", "Data Structures & Algorithms",
-    "Database Management Systems", "Operating Systems",
-    "Computer Networks", "Artificial Intelligence",
-    "Machine Learning", "Web Development"
+# ------------------ TITLE ------------------
+st.markdown("<div class='title'>⚡ Cyber Learning Dashboard ⚡</div>", unsafe_allow_html=True)
+
+# ------------------ INITIALIZE COURSES ------------------
+if "courses" not in st.session_state:
+    st.session_state.courses = [
+        {"name": "Python Basics", "progress": 60},
+        {"name": "Web Development", "progress": 40},
+        {"name": "AI & ML", "progress": 20},
+        {"name": "Cyber Security", "progress": 35}
+    ]
+
+# ------------------ COURSE DISPLAY ------------------
+cols = st.columns(2)
+for i, course in enumerate(st.session_state.courses):
+    with cols[i % 2]:
+        st.markdown(f"<div class='course-card'><div class='course-title'>{course['name']}</div></div>", unsafe_allow_html=True)
+        st.progress(course["progress"] / 100)
+        st.write(f"Progress: **{course['progress']}%**")
+        new_value = st.slider(f"Update {course['name']} progress", 0, 100, course["progress"], key=f"slider_{i}")
+        st.session_state.courses[i]["progress"] = new_value
+        st.write("---")
+
+# ------------------ ADD COURSE ------------------
+st.subheader("➕ Add a New Course")
+new_course = st.text_input("Enter course name:")
+if st.button("Add Course", key="add_course", help="Click to add new course"):
+    if new_course.strip() != "":
+        st.session_state.courses.append({"name": new_course.strip(), "progress": 0})
+        st.success(f"✅ Added new course: {new_course}")
+        time.sleep(1)
+        st.rerun()
+    else:
+        st.warning("⚠️ Please enter a valid course name.")
+
+# ------------------ DYNAMIC MESSAGE ------------------
+motivations = [
+    "Keep going — your future self will thank you!",
+    "Every bit of progress counts ⚡",
+    "Stay focused and keep pushing!",
+    "You're mastering your path — one course at a time!"
 ]
-
-progress_file = "progress.json"
-reflection_file = "reflections.json"
-
-# Load saved progress
-if os.path.exists(progress_file):
-    with open(progress_file, "r") as f:
-        saved_progress = json.load(f)
-else:
-    saved_progress = {course: 0 for course in courses}
-
-# Load reflections
-if os.path.exists(reflection_file):
-    with open(reflection_file, "r") as f:
-        saved_reflections = json.load(f)
-else:
-    saved_reflections = {"latest": ""}
-
-def save_progress(data):
-    with open(progress_file, "w") as f:
-        json.dump(data, f, indent=4)
-
-def save_reflection(text):
-    with open(reflection_file, "w") as f:
-        json.dump({"latest": text}, f, indent=4)
-
-def create_gauge(value, course):
-    fig = go.Figure(
-        go.Indicator(
-            mode="gauge+number",
-            value=value,
-            number={'font': {'size': 28, 'color': '#00bfff'}, 'suffix': "%"},
-            title={'text': course, 'font': {'size': 16, 'color': '#e0e0e0'}},
-            gauge={
-                'axis': {'range': [0, 100], 'tickwidth': 0},
-                'bar': {'color': '#00bfff'},
-                'bgcolor': "#1b1f27",
-                'borderwidth': 1,
-                'bordercolor': "#00bfff",
-                'steps': [
-                    {'range': [0, 50], 'color': "#112233"},
-                    {'range': [50, 100], 'color': "#0f172a"}
-                ],
-            }
-        )
-    )
-    fig.update_layout(
-        height=250,
-        margin=dict(l=10, r=10, t=50, b=10),
-        paper_bgcolor="#1b1f27",
-        font=dict(color="#e0e0e0")
-    )
-    return fig
-
-# ------------------ SIDEBAR ------------------
-st.sidebar.markdown("<div class='sidebar-title'>⚡ Control Hub</div>", unsafe_allow_html=True)
-page = st.sidebar.radio(
-    "Navigate",
-    ["🏠 Dashboard", "🤖 AI Mentor", "💻 Code Runner", "🧘 Spectorial Mode", "🗒 Goals & Notes"],
-    label_visibility="collapsed"
-)
-
-# ------------------ MAIN PAGES ------------------
-if page == "🏠 Dashboard":
-    st.title("💎 CSE Learning Path — Sleek Pro+ (Cyber Blue Edition)")
-    st.markdown("### 🚀 Track, Learn & Elevate Your Skills")
-
-    cols = st.columns(3)
-    for i, course in enumerate(courses):
-        col = cols[i % 3]
-        with col:
-            st.markdown(f"<div class='course-card'>", unsafe_allow_html=True)
-            fig = create_gauge(saved_progress.get(course, 0), course)
-            st.plotly_chart(fig, use_container_width=True)
-            new_val = st.slider(f"Progress for {course}", 0, 100, saved_progress.get(course, 0))
-            if new_val != saved_progress.get(course, 0):
-                saved_progress[course] = new_val
-                save_progress(saved_progress)
-            if st.button(f"Ask AI about {course}", key=f"ai_{course}"):
-                st.session_state["ai_prompt"] = f"Explain more about {course} in simple terms."
-                st.success(f"🤖 AI prompt set for: {course}")
-            st.markdown("</div>", unsafe_allow_html=True)
-
-elif page == "🤖 AI Mentor":
-    st.title("🤖 AI Mentor")
-    st.markdown("### Ask questions, clarify concepts, or seek course guidance.")
-    user_query = st.text_input("Ask your AI Mentor:")
-    if st.button("Send"):
-        if user_query.strip():
-            st.info(f"💬 Query sent: {user_query}")
-        elif "ai_prompt" in st.session_state:
-            st.info(f"💬 Sending last course prompt: {st.session_state['ai_prompt']}")
-        else:
-            st.warning("Please enter a question or use the Dashboard Ask AI buttons.")
-
-elif page == "💻 Code Runner":
-    st.title("💻 Code Runner")
-    st.markdown("### Test Python code safely within your dashboard.")
-    code = ace.st_ace(
-        value="print('Hello, Moscifer!')",
-        language="python",
-        theme="monokai",
-        key="ace_editor",
-        height=300
-    )
-    if st.button("Run Code"):
-        output_buffer = StringIO()
-        with contextlib.redirect_stdout(output_buffer):
-            try:
-                exec(code, {})
-            except Exception as e:
-                print(f"⚠️ Error: {e}")
-        st.text_area("Output", output_buffer.getvalue(), height=200)
-
-elif page == "🧘 Spectorial Mode":
-    st.title("🧘 Spectorial Mode")
-    st.markdown("Enter your reflective state — observe and write your realizations.")
-    reflection = st.text_area(
-        "Your reflections:",
-        value=saved_reflections.get("latest", ""),
-        placeholder="Write your thoughts in Spectorial Consciousness mode..."
-    )
-    if st.button("Save Reflection"):
-        save_reflection(reflection)
-        st.success("🪶 Reflection saved. You’re ascending through awareness, Moscifer.")
-
-elif page == "🗒 Goals & Notes":
-    st.title("🗒 Goals & Notes")
-    daily_goal = st.text_input("🎯 Today's Goal:")
-    note = st.text_area("📓 Notes:")
-    if st.button("Save"):
-        st.success("✅ Goal & Notes saved for today!")
-
-st.sidebar.markdown("---")
-st.sidebar.caption("© 2025 Moscifer — Sleek Pro+ Dashboard (Cyber Blue Edition)")
+st.markdown(f"<p style='text-align:center;color:#00e5ff;margin-top:30px;font-size:18px;'>{random.choice(motivations)}</p>", unsafe_allow_html=True)
