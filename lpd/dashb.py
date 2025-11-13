@@ -21,14 +21,6 @@ st.markdown("""
         [data-testid="stSidebar"] {
             background-color: #111827;
         }
-        [data-testid="stSidebarNav"] button {
-            background: none !important;
-            border: none;
-        }
-        .css-1d391kg, .css-18e3th9 {
-            background-color: #0E1117 !important;
-            color: #FFFFFF !important;
-        }
         .stButton>button {
             background-color: #1E3A8A;
             color: white;
@@ -70,6 +62,13 @@ if "page" not in st.session_state:
     st.session_state.page = "🏠 Home"
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
+if "course_data" not in st.session_state:
+    st.session_state.course_data = pd.DataFrame({
+        "Course": ["Python", "C++", "Web Development", "AI", "Data Science", "Machine Learning", "Cybersecurity"],
+        "Completion %": [45, 70, 20, 85, 60, 30, 90]
+    })
+if "weekly_hours" not in st.session_state:
+    st.session_state.weekly_hours = {"Week 1": 0, "Week 2": 0, "Week 3": 0, "Week 4": 0}
 
 # ------------------ SIDEBAR NAVIGATION ------------------
 st.sidebar.title("🧭 Navigation")
@@ -79,18 +78,18 @@ page = st.sidebar.radio(
 )
 st.session_state.page = page
 
+theme = st.sidebar.selectbox("Theme", ["🌙 Dark", "☀️ Light"])
+if theme == "☀️ Light":
+    st.markdown("<style>body{background-color:white;color:black;}</style>", unsafe_allow_html=True)
+
 # ------------------ HEADER ------------------
 st.title("⚙️ CSE Learning Path Dashboard")
 st.markdown("<p style='color:gray;'>Empowering learners to master Computer Science through smart tracking and insights.</p>", unsafe_allow_html=True)
 
-# ------------------ RANDOM DATA GENERATOR ------------------
-def random_progress_data():
-    return np.random.randint(30, 100, size=7).tolist()
-
 # ------------------ HOME PAGE ------------------
 if st.session_state.page == "🏠 Home":
     st.subheader("🎯 Overall Progress")
-    overall_progress = np.random.randint(40, 100)
+    overall_progress = st.session_state.course_data["Completion %"].mean()
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
         value=overall_progress,
@@ -110,44 +109,42 @@ if st.session_state.page == "🏠 Home":
     st.markdown("### 🚀 Quick Stats")
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.markdown(f"<div class='metric-box'><h3>{np.random.randint(3, 8)}</h3><p>Active Courses</p></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='metric-box'><h3>{len(st.session_state.course_data)}</h3><p>Active Courses</p></div>", unsafe_allow_html=True)
     with col2:
-        st.markdown(f"<div class='metric-box'><h3>{overall_progress}%</h3><p>Average Progress</p></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='metric-box'><h3>{int(overall_progress)}%</h3><p>Average Progress</p></div>", unsafe_allow_html=True)
     with col3:
-        st.markdown(f"<div class='metric-box'><h3>{np.random.randint(20, 120)} hrs</h3><p>Total Study Time</p></div>", unsafe_allow_html=True)
+        total_hours = sum(st.session_state.weekly_hours.values())
+        st.markdown(f"<div class='metric-box'><h3>{total_hours} hrs</h3><p>Total Study Time</p></div>", unsafe_allow_html=True)
 
 # ------------------ COURSE PAGE ------------------
 elif st.session_state.page == "📚 Courses":
-    st.subheader("📘 Course Overview")
-    courses = ["Python", "C++", "Web Development", "AI", "Data Science", "Machine Learning", "Cybersecurity"]
-    completion = random_progress_data()
-    statuses = [
-        "✅ Completed" if x > 80 else "🟡 In Progress" if x > 40 else "❌ Not Started"
-        for x in completion
-    ]
-    df = pd.DataFrame({"Course": courses, "Completion %": completion, "Status": statuses})
-
-    try:
-        st.dataframe(df.style.background_gradient(cmap="Blues"), use_container_width=True)
-    except Exception:
-        st.dataframe(df, use_container_width=True)
+    st.subheader("📘 Update Your Progress")
+    for i, row in st.session_state.course_data.iterrows():
+        new_val = st.slider(f"{row['Course']} Progress", 0, 100, int(row["Completion %"]))
+        st.session_state.course_data.at[i, "Completion %"] = new_val
+        st.progress(new_val)
 
 # ------------------ WEEKLY PROGRESS PAGE ------------------
 elif st.session_state.page == "📆 Weekly Progress":
-    st.subheader("📅 Weekly Growth")
-    weeks = ["Week 1", "Week 2", "Week 3", "Week 4"]
-    progress = np.random.randint(50, 100, size=4)
+    st.subheader("📅 Log Weekly Study Time")
+    week_input = st.selectbox("Select Week", list(st.session_state.weekly_hours.keys()))
+    hours = st.number_input("Hours Studied", min_value=0, max_value=100)
+    if st.button("Log Hours"):
+        st.session_state.weekly_hours[week_input] = hours
+        st.success(f"{hours} hours logged for {week_input}!")
+
+    st.subheader("📊 Weekly Overview")
     fig2 = go.Figure(go.Bar(
-        x=weeks,
-        y=progress,
-        text=progress,
+        x=list(st.session_state.weekly_hours.keys()),
+        y=list(st.session_state.weekly_hours.values()),
+        text=list(st.session_state.weekly_hours.values()),
         textposition="auto",
         marker_color="#00BFFF"
     ))
     fig2.update_layout(
-        title="Weekly Progress Overview",
+        title="Weekly Study Hours",
         xaxis_title="Weeks",
-        yaxis_title="Progress (%)",
+        yaxis_title="Hours",
         height=400,
         paper_bgcolor="#0E1117",
         font={'color': 'white'}
@@ -156,7 +153,14 @@ elif st.session_state.page == "📆 Weekly Progress":
 
 # ------------------ INSIGHTS PAGE ------------------
 elif st.session_state.page == "📈 Insights":
-    st.subheader("📊 Performance Insights")
+    st.subheader("📊 Completion Forecast")
+    avg_daily_hours = st.slider("Average Daily Study Hours", 1, 10, 2)
+    overall_progress = st.session_state.course_data["Completion %"].mean()
+    remaining = 100 - overall_progress
+    days_left = int(remaining / (avg_daily_hours * 2))
+    st.info(f"📅 Estimated {days_left} days to complete your learning path.")
+
+    st.subheader("📈 Performance Insights")
     categories = ["Coding", "Theory", "Projects", "Assignments", "Revisions"]
     scores = np.random.randint(40, 100, size=5)
     fig3 = go.Figure(go.Scatterpolar(
@@ -175,7 +179,8 @@ elif st.session_state.page == "📈 Insights":
         height=400
     )
     st.plotly_chart(fig3, use_container_width=True)
-    st.info("💡 Focus on consistency — your strongest area defines your progress speed!")
+    best_area = categories[np.argmax(scores)]
+    st.success(f"🏆 Your strongest area is **{best_area}** — keep it up!")
 
 # ------------------ AI CHAT ASSISTANT PAGE ------------------
 elif st.session_state.page == "🤖 AI Assistant":
@@ -196,34 +201,7 @@ elif st.session_state.page == "🤖 AI Assistant":
 
     def get_bot_response(msg):
         msg = msg.lower()
-        responses = {
-            "python": "🐍 Use list comprehensions and the standard library to speed up your workflow!",
-            "ai": "🤖 Start with basics: Python + NumPy + Pandas + scikit-learn!",
-            "web": "🌐 Learn HTML → CSS → JavaScript → React for front-end mastery.",
-            "motivate": "💪 Every coder starts small — greatness grows with persistence!"
-        }
-        for key, val in responses.items():
-            if key in msg:
-                return val
-        return np.random.choice([
-            "🚀 Keep going, progress compounds over time!",
-            "💬 Want a coding challenge suggestion?",
-            "✨ You're doing better than you think!"
-        ])
-
-    if user_input:
-        st.session_state.chat_history.append(("user", user_input))
-        with st.spinner("Assistant typing..."):
-            time.sleep(1)
-            reply = get_bot_response(user_input)
-            st.session_state.chat_history.append(("bot", reply))
-
-    for sender, message in st.session_state.chat_history:
-        if sender == "user":
-            st.markdown(f"<div class='chat-user'><b>You:</b> {message}</div>", unsafe_allow_html=True)
-        else:
-            st.markdown(f"<div class='chat-bot'><b>Assistant:</b> {message}</div>", unsafe_allow_html=True)
-
-# ------------------ FOOTER ------------------
-st.markdown("---")
-st.markdown("<p style='text-align:center; color:gray;'>© 2025 CSE Learning Path Dashboard | Developed by <b>Anish</b></p>", unsafe_allow_html=True)
+        if "challenge" in msg:
+            return "🧩 Try building a simple calculator in Python using functions and loops!"
+        elif "career" in msg:
+            return "🎓 Explore roles like Data Analyst, ML Engineer, or Full Stack Developer
