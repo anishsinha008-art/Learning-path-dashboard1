@@ -1,175 +1,194 @@
-# learning_assistant_dashboard.py
-# ----------------------------------------------------------
-# Learning Path Dashboard + AI Learning Assistant (Randomized Progress)
-# Automatically updates learning progress each refresh
-# ----------------------------------------------------------
-
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-import random
-import datetime
+import numpy as np
+import time
 
-# ---------------- PAGE CONFIG ----------------
-st.set_page_config(page_title="AI Learning Assistant", layout="wide")
-st.markdown("""
-    <style>
-    body {background-color:#0b0f19;color:#e6f1ff;}
-    .stApp {background: linear-gradient(180deg,#03050c 0%, #091227 100%);}
-    h1,h2,h3 {color:#00bfff !important;}
-    div[data-testid="stMetricValue"] {color:#00bfff;}
-    .stButton>button {background-color:#0d47a1;color:white;border-radius:10px;}
-    </style>
-""", unsafe_allow_html=True)
+# ------------------ PAGE CONFIG ------------------
+st.set_page_config(page_title="CSE Learning Path Dashboard", layout="wide")
 
-# ---------------- INITIAL STATE ----------------
-if "courses" not in st.session_state:
-    st.session_state.courses = ["Python Fundamentals", "Data Analysis", "Machine Learning", "Web Development"]
-if "planner" not in st.session_state:
-    st.session_state.planner = []
+# ------------------ INITIAL STATES ------------------
+if "menu_open" not in st.session_state:
+    st.session_state.menu_open = False
+if "show_more_courses" not in st.session_state:
+    st.session_state.show_more_courses = False
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-# ---------------- HEADER ----------------
-st.title("🤖 AI Learning Assistant Dashboard")
-st.caption("Personalized guidance • Smart planning • Progress tracking")
+# ------------------ SIDEBAR MENU ------------------
+with st.sidebar:
+    st.title("☰ Dashboard Menu")
+    st.markdown("Navigate through your learning journey 🚀")
+    if st.button("Toggle Menu"):
+        st.session_state.menu_open = not st.session_state.menu_open
 
-tab1, tab2, tab3 = st.tabs(["📘 Progress Tracker", "🗓️ Learning Planner", "💬 Motivator Chatbot"])
+# ------------------ HEADER ------------------
+st.title("🧠 CSE Learning Path Dashboard")
+st.markdown("Track your progress, courses, and overall growth in Computer Science!")
 
-# =======================================================
-# 📘 TAB 1 - PROGRESS TRACKER
-# =======================================================
-with tab1:
-    st.subheader("📊 Learning Progress Overview")
+# ------------------ OVERALL PROGRESS GAUGE ------------------
+st.subheader("🎯 Overall Progress")
+fig = go.Figure(go.Indicator(
+    mode="gauge+number",
+    value=68,
+    title={'text': "Total Completion"},
+    gauge={
+        'axis': {'range': [0, 100]},
+        'bar': {'color': "#4CAF50"},
+        'steps': [
+            {'range': [0, 50], 'color': "#f2f2f2"},
+            {'range': [50, 100], 'color': "#d9f2e6"}
+        ]
+    }
+))
+fig.update_layout(height=300)
+st.plotly_chart(fig, use_container_width=True)
 
-    new_course = st.text_input("Add new course")
-    if st.button("➕ Add Course"):
-        if new_course.strip():
-            st.session_state.courses.append(new_course.strip())
-            st.success(f"Course '{new_course}' added!")
-        else:
-            st.warning("Enter a valid course name.")
+# ------------------ COURSE COMPLETION OVERVIEW ------------------
+st.subheader("📚 Course Completion Overview")
+col1, col2, col3, col4 = st.columns([1, 1, 1, 0.8])
 
-    if st.button("🗑️ Reset Courses"):
-        st.session_state.courses = []
-        st.warning("All courses have been reset!")
+with col1:
+    st.button("🐍 Python", key="python_btn")
+with col2:
+    st.button("💻 C++", key="cpp_btn")
+with col3:
+    st.button("🌐 Web Dev", key="webdev_btn")
+with col4:
+    if st.button("More Courses ▼" if not st.session_state.show_more_courses else "Hide Courses ▲"):
+        st.session_state.show_more_courses = not st.session_state.show_more_courses
 
-    if not st.session_state.courses:
-        st.info("Add some courses to visualize your learning progress.")
+if st.session_state.show_more_courses:
+    st.markdown("---")
+    extra_courses = [
+        "🤖 Artificial Intelligence", "📊 Data Science", "🧩 Machine Learning",
+        "🕹️ Game Development", "📱 App Development",
+        "⚙️ Data Structures & Algorithms", "☁️ Cloud Computing", "🔒 Cybersecurity"
+    ]
+    for course in extra_courses:
+        st.button(course)
+    st.markdown("---")
+
+# ------------------ WEEKLY PROGRESS ------------------
+st.subheader("📆 Weekly Progress")
+weeks = ["Week 1", "Week 2", "Week 3", "Week 4"]
+progress = [70, 82, 90, 100]
+
+fig2 = go.Figure()
+fig2.add_trace(go.Bar(
+    x=weeks,
+    y=progress,
+    text=progress,
+    textposition="auto",
+    marker_color="#4CAF50"
+))
+fig2.update_layout(
+    title="Weekly Growth Chart",
+    xaxis_title="Week",
+    yaxis_title="Progress (%)",
+    height=400
+)
+st.plotly_chart(fig2, use_container_width=True)
+
+# ------------------ COURSE COMPLETION TABLE ------------------
+st.subheader("📈 Detailed Course Progress")
+course_data = {
+    "Course": ["Python", "C++", "Web Development", "AI", "Data Science", "Machine Learning", "Cybersecurity"],
+    "Completion %": [85, 60, 75, 40, 55, 45, 30],
+    "Status": ["Completed", "In Progress", "In Progress", "Not Started", "In Progress", "In Progress", "Not Started"]
+}
+df = pd.DataFrame(course_data)
+
+try:
+    st.dataframe(df.style.background_gradient(cmap="Greens"), use_container_width=True)
+except ImportError:
+    st.warning("Matplotlib not found — showing plain table instead.")
+    st.dataframe(df, use_container_width=True)
+
+# ------------------ CHATBOT SECTION ------------------
+st.markdown("---")
+st.subheader("🤖 AI Chat Assistant")
+st.markdown("<p style='color:gray;'>Ask anything — from coding advice to motivation or study tips!</p>", unsafe_allow_html=True)
+
+# Quick reply buttons
+cols = st.columns(4)
+if cols[0].button("💪 Motivate Me"):
+    st.session_state.chat_history.append(("user", "motivate me"))
+if cols[1].button("🐍 Python Tip"):
+    st.session_state.chat_history.append(("user", "python tip"))
+if cols[2].button("🧠 AI Info"):
+    st.session_state.chat_history.append(("user", "tell me about AI"))
+if cols[3].button("🌐 Web Help"):
+    st.session_state.chat_history.append(("user", "help with web dev"))
+
+user_input = st.chat_input("Type your message here...")
+
+# --- Chatbot logic ---
+def get_bot_response(message, history):
+    message = message.lower()
+
+    motivational_quotes = [
+        "🌟 Keep pushing forward — every line of code takes you closer to mastery!",
+        "🔥 You’re improving every day — trust the process!",
+        "💻 Code. Debug. Learn. Repeat. That’s how legends are made!",
+        "🚀 Success is just consistent effort over time."
+    ]
+
+    python_tips = [
+        "🐍 Use list comprehensions instead of loops — it's cleaner and faster!",
+        "💡 Learn how to use the `zip()` and `enumerate()` functions — they make life easier!",
+        "📘 Master Python’s standard library — it saves tons of time!"
+    ]
+
+    if "python" in message:
+        return np.random.choice(python_tips)
+    elif "c++" in message or "cpp" in message:
+        return "💻 C++ builds logic — practice memory and pointer problems daily!"
+    elif "web" in message:
+        return "🌐 Start with HTML & CSS, then learn JavaScript. Build your first portfolio website!"
+    elif "ai" in message or "machine learning" in message:
+        return "🤖 AI is fascinating! Start with Python, then learn NumPy, Pandas, and scikit-learn."
+    elif "motivate" in message or "inspire" in message:
+        return np.random.choice(motivational_quotes)
+    elif "thanks" in message or "thank you" in message:
+        return "😊 You’re very welcome! Keep going, you’re doing amazing!"
+    elif "joke" in message:
+        return "😂 Why do programmers prefer dark mode? Because light attracts bugs!"
+    elif "progress" in message:
+        return "📊 You’re progressing well! Remember to revise weekly."
+    elif "how are you" in message:
+        return "😄 I’m great, just processing data and cheering you on!"
+    elif "hello" in message or "hi" in message:
+        return "👋 Hey there! Ready to learn something new today?"
     else:
-        # Randomize progress every refresh
-        progress_data = {course: random.randint(10, 100) for course in st.session_state.courses}
-
-        df = pd.DataFrame({
-            "Course": list(progress_data.keys()),
-            "Progress": list(progress_data.values())
-        })
-
-        cols = st.columns(2)
-        for i, (course, val) in enumerate(progress_data.items()):
-            with cols[i % 2]:
-                fig = go.Figure(go.Indicator(
-                    mode="gauge+number",
-                    value=val,
-                    title={'text': course, 'font': {'size': 18, 'color': '#00bfff'}},
-                    gauge={
-                        'axis': {'range': [0, 100]},
-                        'bar': {'color': '#00bfff'},
-                        'bgcolor': "#0a0a0a",
-                        'steps': [
-                            {'range': [0, 50], 'color': "#222"},
-                            {'range': [50, 100], 'color': "#111"},
-                        ],
-                    }
-                ))
-                fig.update_layout(height=250, margin=dict(t=40, b=0))
-                st.plotly_chart(fig, use_container_width=True)
-
-        avg_progress = round(sum(progress_data.values()) / len(progress_data), 2)
-        st.metric("Average Progress", f"{avg_progress}%")
-        if avg_progress < 40:
-            st.warning("⚙️ You're getting started — aim for small consistent goals.")
-        elif avg_progress < 75:
-            st.info("🔥 You're progressing well — keep your momentum going!")
+        # Contextual follow-up
+        if history and "ai" in history[-1][1].lower():
+            return "🧠 Building AI models requires patience — start simple, understand the math first."
+        elif history and "python" in history[-1][1].lower():
+            return "🐍 Once you’re comfortable with basics, try projects like calculators or quiz apps!"
         else:
-            st.success("💎 Excellent! You're mastering your skills.")
+            return np.random.choice([
+                "🤔 Interesting! Could you explain more?",
+                "💬 What topic are you focusing on today?",
+                "🚀 I love your curiosity — keep exploring!",
+                "✨ Want me to suggest a daily coding challenge?"
+            ])
 
-        st.download_button(
-            "📥 Download Progress CSV",
-            data=df.to_csv(index=False).encode("utf-8"),
-            file_name="learning_progress.csv",
-            mime="text/csv"
-        )
+# --- Process input ---
+if user_input:
+    st.session_state.chat_history.append(("user", user_input))
+    with st.spinner("Assistant is typing..."):
+        time.sleep(np.random.uniform(0.6, 1.2))  # Typing delay
+        bot_reply = get_bot_response(user_input, st.session_state.chat_history)
+        st.session_state.chat_history.append(("bot", bot_reply))
 
-# =======================================================
-# 🗓️ TAB 2 - LEARNING PLANNER
-# =======================================================
-with tab2:
-    st.subheader("🗓️ Daily Learning Planner")
-    today = datetime.date.today()
-
-    new_task = st.text_input("Add a new learning goal")
-    deadline = st.date_input("Deadline", today)
-    if st.button("✅ Add Task"):
-        if new_task.strip():
-            st.session_state.planner.append({
-                "task": new_task,
-                "deadline": deadline,
-                "completed": False
-            })
-            st.success("Task added successfully!")
-        else:
-            st.warning("Enter a valid task name.")
-
-    if not st.session_state.planner:
-        st.info("Add your daily or weekly goals here.")
+# --- Display chat ---
+for sender, msg in st.session_state.chat_history:
+    if sender == "user":
+        st.markdown(f"<div style='background:#DCF8C6; padding:10px; border-radius:10px; margin:5px 0; text-align:right'><b>You:</b> {msg}</div>", unsafe_allow_html=True)
     else:
-        for i, task in enumerate(st.session_state.planner):
-            cols = st.columns([5, 2, 1])
-            with cols[0]:
-                st.write(f"🎯 **{task['task']}** (Deadline: {task['deadline']})")
-            with cols[1]:
-                if st.button("Mark Done ✅", key=f"done_{i}"):
-                    st.session_state.planner[i]["completed"] = True
-                    st.success(f"Marked '{task['task']}' complete!")
-            with cols[2]:
-                if st.button("🗑️", key=f"delete_{i}"):
-                    st.session_state.planner.pop(i)
-                    st.warning("Task removed!")
-                    st.experimental_rerun()
+        st.markdown(f"<div style='background:#E9E9EB; padding:10px; border-radius:10px; margin:5px 0'><b>Assistant:</b> {msg}</div>", unsafe_allow_html=True)
 
-        completed_tasks = sum(t["completed"] for t in st.session_state.planner)
-        total_tasks = len(st.session_state.planner)
-        if total_tasks > 0:
-            st.progress(completed_tasks / total_tasks)
-            st.caption(f"{completed_tasks} of {total_tasks} tasks completed.")
-
-# =======================================================
-# 💬 TAB 3 - MOTIVATOR CHATBOT
-# =======================================================
-with tab3:
-    st.subheader("💬 AI Motivator Chatbot (Offline)")
-    st.caption("Ask for motivation, study tips, or guidance!")
-
-    user_input = st.text_input("You:", placeholder="Type your message...")
-    if st.button("Send"):
-        if user_input.strip():
-            responses = [
-                "Keep pushing forward — your consistency will define your success. 🚀",
-                "Learning is a journey, not a race. One step at a time. 🌱",
-                "You're doing amazing! Remember why you started. 💫",
-                "Mistakes mean you're trying. Keep experimenting and learning. 🔥",
-                "Believe in progress, not perfection. Each effort counts! 💡"
-            ]
-            reply = random.choice(responses)
-            st.session_state.chat_history.append(("You", user_input))
-            st.session_state.chat_history.append(("AI", reply))
-        else:
-            st.warning("Please type a message first.")
-
-    if st.session_state.chat_history:
-        for speaker, msg in st.session_state.chat_history[::-1]:
-            if speaker == "You":
-                st.markdown(f"🧠 **You:** {msg}")
-            else:
-                st.markdown(f"🤖 **AI:** {msg}")
+# ------------------ FOOTER ------------------
+st.markdown("---")
+st.markdown("**Developed by Anish | CSE Learning Path Dashboard © 2025**")
