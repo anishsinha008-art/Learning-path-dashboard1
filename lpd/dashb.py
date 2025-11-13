@@ -1,7 +1,16 @@
 # streamlit_learning_dashboard.py
-# Learning Path Dashboard with multiple courses, interactive features and a motivator chatbot
-# Single-file Streamlit app. Save as streamlit_learning_dashboard.py and run with:
-#    pip install streamlit pandas numpy plotly
+# Enhanced Learning Path Dashboard — Cyber Blue theme
+# Features added:
+# - Polished cyber-blue styling and simple CSS animations
+# - Multiple starter courses + dynamic add/remove
+# - Advanced motivator chatbot with optional OpenAI integration (API key via .env or env var)
+# - Persistent JSON storage for courses, planner, quiz history, chat history
+# - File uploads per course (materials) and downloads
+# - Calendar export (ICS) for planned tasks
+# - Pomodoro, progress gauges, interactive charts and animations
+# - Advanced quiz engine with scoring history and per-quiz analytics
+# - All-in-one single-file Streamlit app. Run with:
+#    pip install streamlit pandas numpy plotly python-dotenv ics openai
 #    streamlit run streamlit_learning_dashboard.py
 
 import streamlit as st
@@ -11,15 +20,64 @@ import plotly.graph_objects as go
 import time
 import io
 import random
-from datetime import datetime, timedelta
+import json
+import os
+from datetime import datetime, timedelta, date
+from pathlib import Path
 
-st.set_page_config(page_title="CSE Learning Path Dashboard", layout="wide")
+# Optional imports
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
 
-# ---------------------- Helpers ----------------------
-def init_state():
-    if 'courses' not in st.session_state:
-        # sample starter courses
-        st.session_state.courses = {
+OPENAI_KEY = os.getenv('OPENAI_API_KEY', '')
+USE_OPENAI = bool(OPENAI_KEY)
+
+# persistent storage file
+DATA_FILE = Path('./dashboard_data.json')
+
+st.set_page_config(page_title="CSE Learning Path — Cyber Blue", layout="wide")
+
+# -------------------- Styling & small animations --------------------
+st.markdown("""
+<style>
+/* Cyber-blue theme */
+body { background: linear-gradient(180deg, #031023 0%, #071b2b 100%); color: #e6f7ff; }
+.section-card { background: rgba(255,255,255,0.02); padding: 16px; border-radius: 12px; box-shadow: 0 6px 18px rgba(0,0,0,0.45); }
+.h-title { color: #9fe8ff; font-size:28px; margin:0 }
+.small { color:#bfeeff }
+.button-glow { border-radius:12px; padding:8px 12px; background:linear-gradient(90deg,#00b4d8,#0077b6); color:white; box-shadow: 0 6px 20px rgba(0,180,216,0.18); }
+.fade-in { animation: fadeIn 0.9s ease-in-out; }
+@keyframes fadeIn { from {opacity:0; transform: translateY(6px)} to {opacity:1; transform: none} }
+.chat-bubble { background: rgba(255,255,255,0.04); padding:10px; border-radius:10px; }
+</style>
+""", unsafe_allow_html=True)
+
+# -------------------- Helpers --------------------
+
+def load_data():
+    if DATA_FILE.exists():
+        try:
+            with open(DATA_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+
+def save_data(data):
+    try:
+        with open(DATA_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        st.error(f'Failed to save data: {e}')
+
+
+def default_state():
+    return {
+        'courses': {
             'Python Basics': {
                 'modules': [
                     {'title':'Intro & Setup', 'duration_min':30, 'done':False},
@@ -27,7 +85,8 @@ def init_state():
                     {'title':'Control Flow', 'duration_min':40, 'done':False},
                     {'title':'Functions', 'duration_min':60, 'done':False}
                 ],
-                'color':'#0f52ba'
+                'color':'#0f52ba',
+                'materials': []
             },
             'Web Development': {
                 'modules': [
@@ -35,7 +94,8 @@ def init_state():
                     {'title':'JavaScript Basics', 'duration_min':60, 'done':False},
                     {'title':'Deploying Sites', 'duration_min':30, 'done':False}
                 ],
-                'color':'#0077b6'
+                'color':'#0077b6',
+                'materials': []
             },
             'Data Structures': {
                 'modules': [
@@ -43,277 +103,380 @@ def init_state():
                     {'title':'Stacks & Queues', 'duration_min':45, 'done':False},
                     {'title':'Trees', 'duration_min':70, 'done':False}
                 ],
-                'color':'#00b4d8'
+                'color':'#00b4d8',
+                'materials': []
             }
-        }
-    if 'active_course' not in st.session_state:
-        st.session_state.active_course = list(st.session_state.courses.keys())[0]
-    if 'motivation_history' not in st.session_state:
-        st.session_state.motivation_history = []
-    if 'pomodoro' not in st.session_state:
-        st.session_state.pomodoro = {'running':False, 'end_time':None, 'duration':25*60}
-    if 'chat_history' not in st.session_state:
-        st.session_state.chat_history = []
+        },
+        'active_course': 'Python Basics',
+        'chat_history': [],
+        'planner': {},
+        'pomodoro': {'running':False, 'end_time':None, 'duration':25*60},
+        'quiz_history': []
+    }
 
 
-def save_state_to_csv():
-    rows = []
-    for course, data in st.session_state.courses.items():
-        for m in data['modules']:
-            rows.append({'course':course,'module':m['title'],'duration_min':m['duration_min'],'done':m['done']})
-    df = pd.DataFrame(rows)
-    return df
+def ensure_state():
+    data = load_data()
+    if not data:
+        data = default_state()
+        save_data(data)
+    # minimal repairs
+    if 'courses' not in data:
+        data['courses'] = default_state()['courses']
+    if 'active_course' not in data:
+        data['active_course'] = list(data['courses'].keys())[0]
+    if 'chat_history' not in data:
+        data['chat_history'] = []
+    if 'planner' not in data:
+        data['planner'] = {}
+    if 'pomodoro' not in data:
+        data['pomodoro'] = {'running':False, 'end_time':None, 'duration':25*60}
+    if 'quiz_history' not in data:
+        data['quiz_history'] = []
+    save_data(data)
+    return data
 
 
-def course_progress(course_name):
-    modules = st.session_state.courses[course_name]['modules']
+def course_progress(data, course_name):
+    modules = data['courses'][course_name]['modules']
     if len(modules)==0:
         return 0
     done = sum(1 for m in modules if m.get('done'))
     return int(done/len(modules)*100)
 
 
-def plot_center_gauge(percent, title="Progress"):
-    # Plotly gauge with centered percentage text
+def plot_gauge(percent, title='Progress'):
     fig = go.Figure(go.Indicator(
-        mode = "gauge+number",
-        value = percent,
-        domain = {'x': [0, 1], 'y': [0, 1]},
-        title = {'text': title},
-        number = {'valueformat': "d", 'font': {'size':36}},
-        gauge = {
-            'axis': {'range': [0, 100]},
-            'bar': {'color': "#00B4D8", 'thickness':0.25},
-            'bgcolor':'white',
-            'steps': [
-                {'range':[0,33], 'color':'#ffcccc'},
-                {'range':[33,66], 'color':'#ffe699'},
-                {'range':[66,100], 'color':'#ccffcc'}
-            ],
-            'threshold': {
-                'line': {'color': "red", 'width': 4},
-                'thickness': 0.75,
-                'value': percent
-            }
-        }
+        mode='gauge+number', value=percent,
+        number={'font':{'size':40}},
+        gauge={'axis':{'range':[0,100]}, 'bar':{'color':'#00B4D8','thickness':0.25},
+               'steps':[{'range':[0,33],'color':'#2b2b2b'},{'range':[33,66],'color':'#124559'},{'range':[66,100],'color':'#013a63'}]},
+        domain={'x':[0,1],'y':[0,1]}, title={'text':title}
     ))
-    fig.update_layout(margin={'t':10,'b':10,'l':10,'r':10}, height=300)
+    fig.update_layout(height=260, margin={'t':10,'b':10,'l':10,'r':10}, paper_bgcolor='rgba(0,0,0,0)')
     return fig
 
+# -------------------- Init persistent state --------------------
+ensure_state()
+STATE = load_data()
 
-# ---------------------- Init ----------------------
-init_state()
+# -------------------- Top bar --------------------
+st.markdown(f"<div class='section-card fade-in' style='display:flex;justify-content:space-between;align-items:center'>
+  <div>
+    <h1 class='h-title'>CSE Learning Path</h1>
+    <div class='small'>Cyber Blue — interactive dashboard with motivator chatbot</div>
+  </div>
+  <div style='text-align:right'>
+    <div class='small'>Status: <strong>{'OpenAI API' if USE_OPENAI else 'Local Motivator'}</strong></div>
+    <div style='margin-top:6px'><small class='small'>Data file: <code>{DATA_FILE}</code></small></div>
+  </div>
+</div>", unsafe_allow_html=True)
 
-# ---------------------- Layout ----------------------
-st.markdown('<div style="background:#071b2b;padding:18px;border-radius:12px">', unsafe_allow_html=True)
-col1, col2 = st.columns([1,4])
-with col1:
-    st.image("https://raw.githubusercontent.com/streamlit/brand/master/streamlit-logo-primary-colormark-darktext.png", width=80)
-    st.title('Learning Path')
-with col2:
-    st.markdown('<h2 style="color:#9fe8ff">Cyber Blue Dashboard</h2>', unsafe_allow_html=True)
-st.markdown('</div>', unsafe_allow_html=True)
-
-# Sidebar controls
+# -------------------- Sidebar --------------------
 with st.sidebar:
-    st.header('Courses')
-    # course selector
-    course_names = list(st.session_state.courses.keys())
-    selected = st.selectbox('Active Course', course_names, index=course_names.index(st.session_state.active_course))
-    st.session_state.active_course = selected
+    st.header('Controls')
+    course_list = list(STATE['courses'].keys())
+    active = st.selectbox('Active course', course_list, index=course_list.index(STATE['active_course']))
+    STATE['active_course'] = active
 
     st.markdown('---')
-    new_course = st.text_input('Add Course')
-    if st.button('Create Course') and new_course.strip():
-        if new_course in st.session_state.courses:
+    st.subheader('Create Course')
+    new_course = st.text_input('Course name', '')
+    coln = st.columns([2,1])
+    with coln[1]:
+        color = st.color_picker('Accent', value='#00b4d8')
+    if st.button('Add Course') and new_course.strip():
+        if new_course in STATE['courses']:
             st.warning('Course already exists')
         else:
-            st.session_state.courses[new_course] = {'modules':[], 'color':'#00b4d8'}
-            st.success(f'Created course: {new_course}')
+            STATE['courses'][new_course.strip()] = {'modules':[], 'color':color, 'materials':[]}
+            save_data(STATE)
+            st.experimental_rerun()
 
     st.markdown('---')
-    st.header('Quick Actions')
+    st.subheader('Quick Actions')
     if st.button('Export progress CSV'):
-        df = save_state_to_csv()
-        towrite = io.BytesIO()
-        df.to_csv(towrite, index=False)
-        towrite.seek(0)
-        st.download_button('Download CSV', towrite, file_name='learning_progress.csv', mime='text/csv')
+        rows=[]
+        for c,d in STATE['courses'].items():
+            for m in d['modules']:
+                rows.append({'course':c,'module':m['title'],'duration_min':m['duration_min'],'done':m['done']})
+        df = pd.DataFrame(rows)
+        buf = io.BytesIO(); df.to_csv(buf,index=False); buf.seek(0)
+        st.download_button('Download CSV', buf, file_name='learning_progress.csv')
 
-    if st.button('Reset demo data'):
-        for c in list(st.session_state.courses.keys()):
-            del st.session_state.courses[c]
-        init_state()
+    if st.button('Reset to demo'):
+        DATA_FILE.unlink(missing_ok=True)
+        st.success('Reset. Reloading...')
         st.experimental_rerun()
 
     st.markdown('---')
     st.subheader('Pomodoro')
-    pmin = st.number_input('Minutes', min_value=5, max_value=60, value=int(st.session_state.pomodoro['duration']/60))
+    pmin = st.number_input('Minutes', min_value=5, max_value=60, value=int(STATE['pomodoro']['duration']//60))
     if st.button('Start Pomodoro'):
-        st.session_state.pomodoro['duration'] = pmin*60
-        st.session_state.pomodoro['end_time'] = time.time() + st.session_state.pomodoro['duration']
-        st.session_state.pomodoro['running'] = True
+        STATE['pomodoro']['duration'] = int(pmin*60)
+        STATE['pomodoro']['end_time'] = time.time() + STATE['pomodoro']['duration']
+        STATE['pomodoro']['running'] = True
+        save_data(STATE)
     if st.button('Stop Pomodoro'):
-        st.session_state.pomodoro['running'] = False
+        STATE['pomodoro']['running'] = False
+        STATE['pomodoro']['end_time'] = None
+        save_data(STATE)
 
-# Main area
-left, right = st.columns([2,1])
+# -------------------- Main layout --------------------
+left, right = st.columns([2.5,1.2])
 
 with left:
-    st.subheader(f"{st.session_state.active_course}")
-    course = st.session_state.courses[st.session_state.active_course]
+    st.subheader(f"Course — {STATE['active_course']}")
+    course = STATE['courses'][STATE['active_course']]
 
-    # modules table with checkboxes
-    for i, module in enumerate(course['modules']):
-        cols = st.columns([0.05, 0.65, 0.15, 0.15])
-        with cols[0]:
-            chk = st.checkbox('', value=module.get('done', False), key=f"chk_{st.session_state.active_course}_{i}")
-            if chk != module.get('done', False):
-                module['done'] = chk
-        with cols[1]:
-            st.markdown(f"**{module['title']}**")
-            st.caption(f"Estimated: {module['duration_min']} min")
-        with cols[2]:
-            if st.button('Add Time', key=f'addtime_{st.session_state.active_course}_{i}'):
-                module['duration_min'] += 10
-        with cols[3]:
-            if st.button('Remove', key=f'remove_{st.session_state.active_course}_{i}'):
-                course['modules'].pop(i)
-                st.experimental_rerun()
+    # Modules list
+    st.markdown('<div class="section-card">', unsafe_allow_html=True)
+    st.write('**Modules**')
+    for i,mod in enumerate(course['modules']):
+        cols = st.columns([0.05,0.6,0.15,0.2])
+        chk = cols[0].checkbox('', value=mod['done'], key=f"chk_{STATE['active_course']}_{i}")
+        if chk != mod['done']:
+            course['modules'][i]['done'] = chk
+            save_data(STATE)
+        cols[1].markdown(f"**{mod['title']}**
 
-    st.markdown('---')
-    st.subheader('Add Module')
-    with st.form('add_module'):
+<small class='small'>Est: {mod['duration_min']} min</small>", unsafe_allow_html=True)
+        if cols[2].button('Add +10min', key=f'add_{i}'):
+            course['modules'][i]['duration_min'] += 10
+            save_data(STATE)
+        if cols[3].button('Remove', key=f'rem_{i}'):
+            course['modules'].pop(i)
+            save_data(STATE)
+            st.experimental_rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # Add module
+    st.markdown('<div class="section-card" style="margin-top:12px">', unsafe_allow_html=True)
+    st.write('Add Module')
+    with st.form('add_mod_form'):
         mtitle = st.text_input('Module title')
         mdur = st.number_input('Duration (min)', min_value=5, value=30)
-        submitted = st.form_submit_button('Add Module')
-        if submitted and mtitle.strip():
+        sub = st.form_submit_button('Add Module')
+        if sub and mtitle.strip():
             course['modules'].append({'title':mtitle.strip(),'duration_min':int(mdur),'done':False})
+            save_data(STATE)
             st.success('Module added')
             st.experimental_rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown('---')
-    st.subheader('Mini Quiz (Self-check)')
-    q1 = st.radio('1) Which data type is immutable in Python?', ('List','Tuple','Dict','Set'), key='q1')
-    if st.button('Submit Quiz'):
-        score = 0
-        if q1 == 'Tuple': score += 1
-        st.success(f'You scored {score}/1 — keep going!')
+    # Materials: upload per course
+    st.markdown('<div class="section-card" style="margin-top:12px">', unsafe_allow_html=True)
+    st.write('Course Materials')
+    uploaded = st.file_uploader('Upload material (PDF / Image / ZIP)', type=['pdf','png','jpg','jpeg','zip'], accept_multiple_files=True)
+    if uploaded:
+        for f in uploaded:
+            content = f.read()
+            filename = f.name
+            # save material to local folder for this course
+            mat_dir = Path('./materials') / STATE['active_course']
+            mat_dir.mkdir(parents=True, exist_ok=True)
+            with open(mat_dir/filename, 'wb') as fh:
+                fh.write(content)
+            course['materials'].append(str(mat_dir/filename))
+            save_data(STATE)
+            st.success(f'Uploaded {filename}')
+    if course['materials']:
+        for m in course['materials']:
+            st.write(f'- {m}')
+            # provide download
+            try:
+                with open(m, 'rb') as fh:
+                    st.download_button('Download', fh, file_name=Path(m).name)
+            except Exception:
+                st.write('(file missing)')
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown('---')
-    st.subheader('Study Planner (Quick)')
-    today = datetime.now().date()
-    planner_date = st.date_input('Pick date', value=today)
-    task = st.text_input('Task (what will you study?)')
-    if st.button('Plan Task') and task.strip():
-        key = f'plan_{planner_date}'
-        if key not in st.session_state:
-            st.session_state[key] = []
-        st.session_state[key].append({'task':task,'time':datetime.now().strftime('%H:%M')})
+    # Planner with ICS export
+    st.markdown('<div class="section-card" style="margin-top:12px">', unsafe_allow_html=True)
+    st.write('Study Planner & Calendar')
+    plan_date = st.date_input('Pick date', value=date.today())
+    plan_task = st.text_input('Task (e.g., Study Module 2)')
+    plan_time = st.time_input('Time', value=datetime.now().time())
+    if st.button('Add to Planner') and plan_task.strip():
+        k = plan_date.isoformat()
+        if k not in STATE['planner']:
+            STATE['planner'][k] = []
+        STATE['planner'][k].append({'task':plan_task,'time':plan_time.strftime('%H:%M'),'course':STATE['active_course']})
+        save_data(STATE)
         st.success('Planned')
     # show today's plans
-    plans_for_date = st.session_state.get(f'plan_{planner_date}', [])
-    if plans_for_date:
-        for p in plans_for_date:
-            st.write(f"- {p['task']} (added {p['time']})")
+    plans = STATE['planner'].get(plan_date.isoformat(), [])
+    if plans:
+        for p in plans:
+            st.write(f"- [{p['course']}] {p['task']} at {p['time']}")
     else:
         st.info('No plans for this date')
 
+    # ICS export (simple)
+    if st.button('Export selected date (.ics)'):
+        try:
+            from ics import Calendar, Event
+            cal = Calendar()
+            for p in plans:
+                e = Event()
+                e.name = f"{p['course']}: {p['task']}"
+                dt = datetime.combine(plan_date, datetime.strptime(p['time'],'%H:%M').time())
+                e.begin = dt
+                e.duration = {'minutes':30}
+                cal.events.add(e)
+            ics_bytes = cal.serialize().encode('utf-8')
+            st.download_button('Download ICS', ics_bytes, file_name=f'planner_{plan_date}.ics')
+        except Exception as e:
+            st.error('Install package "ics" to enable calendar export')
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # Mini Quiz Engine
+    st.markdown('<div class="section-card" style="margin-top:12px">', unsafe_allow_html=True)
+    st.write('Quiz Center')
+    st.write('Create a quick multiple-choice quiz for self-check (saved to history)')
+    with st.form('quiz_form'):
+        qtxt = st.text_input('Question')
+        opt1 = st.text_input('Option 1')
+        opt2 = st.text_input('Option 2')
+        opt3 = st.text_input('Option 3')
+        opt4 = st.text_input('Option 4')
+        ans = st.selectbox('Correct option', ('Option 1','Option 2','Option 3','Option 4'))
+        qsub = st.form_submit_button('Add & Take Quiz')
+        if qsub and qtxt.strip():
+            qobj = {'question':qtxt,'options':[opt1,opt2,opt3,opt4],'answer':ans,'course':STATE['active_course'],'time':datetime.now().isoformat()}
+            # record quiz template and immediately present it
+            # launch small interactive attempt
+            STATE['quiz_history'].append({'quiz':qobj,'result':None})
+            save_data(STATE)
+            st.success('Quiz created — answering below')
+            # auto-open attempt (simple): we will show UI below after rerun
+            st.experimental_rerun()
+    # If there are pending quizzes (most recent created), show attempt
+    if STATE['quiz_history']:
+        last = STATE['quiz_history'][-1]
+        if last['result'] is None:
+            q = last['quiz']
+            st.markdown('**Take latest quiz**')
+            chosen = st.radio(q['question'], q['options'], key='attempt_latest')
+            if st.button('Submit Answer'):
+                correct = q['options'][['Option 1','Option 2','Option 3','Option 4'].index(q['answer'])]
+                score = 1 if chosen==correct else 0
+                last['result'] = {'chosen':chosen,'correct':correct,'score':score,'time':datetime.now().isoformat()}
+                save_data(STATE)
+                if score:
+                    st.success('Correct ✅')
+                else:
+                    st.error(f'Incorrect — correct: {correct}')
+    st.markdown('</div>', unsafe_allow_html=True)
+
 with right:
-    # Progress gauge
-    prog = course_progress(st.session_state.active_course)
-    st.plotly_chart(plot_center_gauge(prog, title='Course Progress'), use_container_width=True)
-    st.metric('Overall course completion', f"{prog}%")
+    st.subheader('Overview')
+    prog = course_progress(STATE, STATE['active_course'])
+    st.plotly_chart(plot_gauge(prog, title='Course Progress'), use_container_width=True)
+    st.metric('Completion', f"{prog}%")
 
-    # Course summary
     st.markdown('---')
-    st.subheader('Course Summary')
+    st.write('Quick Analytics')
+    nmods = len(course['modules'])
     total_min = sum(m['duration_min'] for m in course['modules'])
-    remaining_min = sum(m['duration_min'] for m in course['modules'] if not m.get('done'))
-    st.write(f"Modules: {len(course['modules'])}")
-    st.write(f"Estimated total time: {total_min} min")
-    st.write(f"Remaining time: {remaining_min} min")
+    rem_min = sum(m['duration_min'] for m in course['modules'] if not m['done'])
+    st.write(f'Modules: {nmods}')
+    st.write(f'Total est. time: {total_min} min')
+    st.write(f'Remaining: {rem_min} min')
 
-    # Motivator Chatbot (simple, built-in)
     st.markdown('---')
     st.subheader('Motivator Chatbot')
-    chat_input = st.text_input('Say something to your motivator', key='chat_input')
-    def motivator_response(user_msg):
-        user_msg = user_msg.lower().strip()
-        # rules + random encouraging quotes
-        quotes = [
-            "Small progress is still progress. Keep going!",
-            "You are capable of more than you think.",
-            "Consistency beats intensity. Study a little every day.",
-            "Remember why you started — and show up for yourself today."
-        ]
-        if any(word in user_msg for word in ['tired','give up','stuck','frustrat']):
-            return random.choice([
-                "Take a short break — 5 minutes away from the screen can change your focus.",
-                "Try breaking the task into 10-minute chunks — you'll be surprised how much you finish.",
-                random.choice(quotes)
-            ])
-        if user_msg.endswith('?'):
-            return random.choice(["That's a good question — try searching a concise answer and summarize it.", random.choice(quotes)])
-        if 'progress' in user_msg:
-            return f"Your active course '{st.session_state.active_course}' is {course_progress(st.session_state.active_course)}% complete. Keep it up!"
-        return random.choice(quotes)
+    st.write('Use the built-in motivator or connect to OpenAI (set OPENAI_API_KEY env var).')
+    chat_in = st.text_input('Talk to motivator', key='chat_in')
+    if st.button('Send') and chat_in.strip():
+        # produce response
+        if USE_OPENAI:
+            try:
+                import openai
+                openai.api_key = OPENAI_KEY
+                resp = openai.ChatCompletion.create(
+                    model='gpt-4o',
+                    messages=[{'role':'system','content':'You are a short, encouraging study motivator. Keep answers under 40 words.'},{'role':'user','content':chat_in}],
+                    max_tokens=100
+                )
+                bot = resp.choices[0].message.content.strip()
+            except Exception as e:
+                bot = f"(OpenAI error) {e} — falling back to local motivator"
+                bot = bot if not bot.startswith('(') else local_motivator(chat_in)
+        else:
+            # local rule-based
+            def local_motivator(msg):
+                msg = msg.lower()
+                quotes = [
+                    "Small progress is still progress. Keep going!",
+                    "You are capable of more than you think.",
+                    "Consistency beats intensity. Study a little every day.",
+                    "Remember why you started — and show up for yourself today."
+                ]
+                if any(x in msg for x in ['tired','give up','stuck','frustrat']):
+                    return random.choice(["Take a short break — 5 minutes away from the screen can change your focus.", "Try breaking the task into 10-minute chunks — you'll be surprised how much you finish.", random.choice(quotes)])
+                if msg.endswith('?'):
+                    return random.choice(["That's a good question — try searching a concise answer and summarize it.", random.choice(quotes)])
+                if 'progress' in msg:
+                    return f"Your active course '{STATE['active_course']}' is {course_progress(STATE, STATE['active_course'])}% complete. Keep it up!"
+                if 'motivate' in msg or 'encour' in msg:
+                    return random.choice(quotes)
+                return random.choice(quotes)
+            bot = local_motivator(chat_in)
+        STATE['chat_history'].append({'user':chat_in,'bot':bot,'time':datetime.now().isoformat()})
+        save_data(STATE)
+        st.experimental_rerun()
 
-    if st.button('Send to Motivator') and chat_input.strip():
-        resp = motivator_response(chat_input)
-        st.session_state.chat_history.append({'user':chat_input, 'bot':resp, 'time':datetime.now().strftime('%H:%M')})
+    # show latest chat entries
+    if STATE['chat_history']:
+        for m in STATE['chat_history'][-6:][::-1]:
+            st.markdown(f"<div class='chat-bubble'><strong>You</strong> <small class='small'>({m['time']})</small><br>{m['user']}<br><strong>Motivator:</strong> {m['bot']}</div>", unsafe_allow_html=True)
 
-    # show chat history
-    for msg in st.session_state.chat_history[::-1]:
-        st.markdown(f"**You** ({msg['time']}): {msg['user']}")
-        st.info(f"Motivator: {msg['bot']}")
-
-    # Quick analytics
     st.markdown('---')
-    st.subheader('Quick Analytics')
-    # show progress across courses
-    course_names = list(st.session_state.courses.keys())
-    progress_list = [course_progress(c) for c in course_names]
-    df = pd.DataFrame({'course':course_names,'progress':progress_list})
+    st.subheader('Course Progress Table')
+    ctitles = []
+    cprogress = []
+    for c in STATE['courses']:
+        ctitles.append(c)
+        cprogress.append(course_progress(STATE, c))
+    df = pd.DataFrame({'course':ctitles,'progress':cprogress})
     st.dataframe(df)
 
-# Footer controls
+# -------------------- Footer actions --------------------
 st.markdown('---')
 cols = st.columns([1,1,1])
 with cols[0]:
     if st.button('Save Snapshot'):
-        df = save_state_to_csv()
-        st.session_state['last_snapshot'] = df
-        st.success('Snapshot saved to session state')
+        save_data(STATE)
+        st.success('Saved to dashboard_data.json')
 with cols[1]:
-    if st.button('Load Snapshot'):
-        if 'last_snapshot' in st.session_state:
-            df = st.session_state['last_snapshot']
-            # attempt to load back
-            st.success('Snapshot loaded (preview)')
-            st.dataframe(df)
-        else:
-            st.warning('No snapshot found')
+    if st.button('Download Snapshot (JSON)'):
+        j = json.dumps(STATE, indent=2)
+        st.download_button('Download JSON', j.encode('utf-8'), file_name='dashboard_snapshot.json')
 with cols[2]:
     if st.button('Get Motivational Tip'):
-        tips = [
-            'Use the Pomodoro: 25 minutes focused, 5 minutes break.',
-            'Turn goals into specific tasks: "Read chapter 3" not just "Study Python".',
-            'Celebrate micro wins: mark 1 module as done each study session.'
-        ]
-        st.balloons()
-        st.success(random.choice(tips))
+        tips = ['Use Pomodoro: 25/5.','Break tasks into 10-minute chunks.','Celebrate micro wins each session.']
+        st.balloons(); st.success(random.choice(tips))
 
-# Pomodoro display (non-blocking)
-if st.session_state.pomodoro['running'] and st.session_state.pomodoro['end_time']:
-    remaining = int(st.session_state.pomodoro['end_time'] - time.time())
+# Pomodoro non-blocking display
+if STATE['pomodoro'].get('running') and STATE['pomodoro'].get('end_time'):
+    remaining = int(STATE['pomodoro']['end_time'] - time.time())
     if remaining <= 0:
-        st.session_state.pomodoro['running'] = False
+        STATE['pomodoro']['running'] = False
+        STATE['pomodoro']['end_time'] = None
+        save_data(STATE)
         st.success('Pomodoro finished! Take a break 🎉')
     else:
-        minutes = remaining//60
-        seconds = remaining%60
-        st.info(f'Pomodoro running — time left: {minutes:02d}:{seconds:02d}')
+        mleft = remaining//60; sleft = remaining%60
+        st.info(f'Pomodoro — time left: {mleft:02d}:{sleft:02d}')
 
-# End of app
-st.markdown('\n---\n*Made with ❤️ — interactive dashboard with multiple courses, progress tracking, planner, quizzes, and a friendly motivator chatbot.*')
+# Small analytics for quiz history
+if STATE.get('quiz_history'):
+    scores = [q['result']['score'] for q in STATE['quiz_history'] if q['result']]
+    if scores:
+        avg = sum(scores)/len(scores)
+        st.sidebar.metric('Avg quiz score', f"{avg:.2f}")
+
+st.markdown('
+---
+*Made with ❤️ — enhanced interactive dashboard. Customize further? Tell me what else to add: syncing to Google Calendar, richer LLM replies, or multi-user support.*')
