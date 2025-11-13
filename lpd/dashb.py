@@ -1,4 +1,3 @@
-# CSE Learning Path Dashboard
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -165,17 +164,4 @@ elif st.session_state.page == "🤖 AI Assistant":
     quicks = st.columns(4)
     if quicks[0].button("💪 Motivate Me"):
         st.session_state.chat_history.append(("user", "motivate me"))
-    if quicks[1].button("🐍 Python Tip"):
-        st.session_state.chat_history.append(("user", "python tip"))
-    if quicks[2].button("🧠 AI Info"):
-        st.session_state.chat_history.append(("user", "tell me about AI"))
-    if quicks[3].button("🌐 Web Help"):
-        st.session_state.chat_history.append(("user", "help with web dev"))
-
-    user_input = st.chat_input("💬 Type your message here...")
-
-    def get_bot_response(msg):
-        msg = msg.lower()
-        if "challenge" in msg:
-            return "🧩 Try building a simple calculator in Python using functions and loops!"
-        elif "career
+    if quicks[
