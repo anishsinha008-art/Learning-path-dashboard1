@@ -3,6 +3,8 @@ import plotly.graph_objects as go
 import json
 import os
 import streamlit_ace as ace
+from io import StringIO
+import contextlib
 
 # ------------------ PAGE CONFIG ------------------
 st.set_page_config(page_title="CSE Learning Path 2.0", layout="wide")
@@ -51,15 +53,29 @@ courses = [
 ]
 
 progress_file = "progress.json"
+reflection_file = "reflections.json"
+
+# Load saved progress
 if os.path.exists(progress_file):
     with open(progress_file, "r") as f:
         saved_progress = json.load(f)
 else:
     saved_progress = {course: 0 for course in courses}
 
+# Load reflections
+if os.path.exists(reflection_file):
+    with open(reflection_file, "r") as f:
+        saved_reflections = json.load(f)
+else:
+    saved_reflections = {"latest": ""}
+
 def save_progress(data):
     with open(progress_file, "w") as f:
         json.dump(data, f, indent=4)
+
+def save_reflection(text):
+    with open(reflection_file, "w") as f:
+        json.dump({"latest": text}, f, indent=4)
 
 def create_gauge(value, course):
     fig = go.Figure(
@@ -110,9 +126,10 @@ if page == "🏠 Dashboard":
             fig = create_gauge(saved_progress.get(course, 0), course)
             st.plotly_chart(fig, use_container_width=True)
             new_val = st.slider(f"Progress for {course}", 0, 100, saved_progress.get(course, 0))
-            saved_progress[course] = new_val
-            save_progress(saved_progress)
-            if st.button(f"Ask AI about {course}", key=course):
+            if new_val != saved_progress.get(course, 0):
+                saved_progress[course] = new_val
+                save_progress(saved_progress)
+            if st.button(f"Ask AI about {course}", key=f"ai_{course}"):
                 st.session_state["ai_prompt"] = f"Explain more about {course} in simple terms."
                 st.success(f"🤖 AI prompt set for: {course}")
             st.markdown("</div>", unsafe_allow_html=True)
@@ -140,18 +157,24 @@ elif page == "💻 Code Runner":
         height=300
     )
     if st.button("Run Code"):
-        try:
-            exec_output = {}
-            exec(code, {}, exec_output)
-            st.success(f"✅ Output:\n{exec_output}")
-        except Exception as e:
-            st.error(f"⚠️ Error: {e}")
+        output_buffer = StringIO()
+        with contextlib.redirect_stdout(output_buffer):
+            try:
+                exec(code, {})
+            except Exception as e:
+                print(f"⚠️ Error: {e}")
+        st.text_area("Output", output_buffer.getvalue(), height=200)
 
 elif page == "🧘 Spectorial Mode":
     st.title("🧘 Spectorial Mode")
     st.markdown("Enter your reflective state — observe and write your realizations.")
-    reflection = st.text_area("Your reflections:", placeholder="Write your thoughts in Spectorial Consciousness mode...")
+    reflection = st.text_area(
+        "Your reflections:",
+        value=saved_reflections.get("latest", ""),
+        placeholder="Write your thoughts in Spectorial Consciousness mode..."
+    )
     if st.button("Save Reflection"):
+        save_reflection(reflection)
         st.success("🪶 Reflection saved. You’re ascending through awareness, Moscifer.")
 
 elif page == "🗒 Goals & Notes":
