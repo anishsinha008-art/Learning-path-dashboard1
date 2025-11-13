@@ -4,31 +4,39 @@ import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
 import time
-from io import BytesIO
 import random
+from io import BytesIO
 
 # ------------------ PAGE CONFIG ------------------
 st.set_page_config(page_title="CSE Learning Path Dashboard", layout="wide")
 
 # ------------------ SESSION STATE DEFAULTS ------------------
 if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []  # list of tuples (sender, message, iso_timestamp)
+    # list of tuples (sender, message, iso_timestamp)
+    st.session_state.chat_history = []
 if "topic_memory" not in st.session_state:
     st.session_state.topic_memory = None
 if "download_blob" not in st.session_state:
     st.session_state.download_blob = None
+if "show_more_courses" not in st.session_state:
+    st.session_state.show_more_courses = False
 
 # ------------------ GLOBAL NEON THEME STYLES ------------------
 st.markdown(
     """
     <style>
+    /* app background */
     .stApp {
         background: #000000;
         color: #bfffc2;
     }
+
+    /* Headings */
     h1, h2, h3 {
         color: #bfffc2;
     }
+
+    /* Neon buttons look */
     .neon-btn {
         background: linear-gradient(90deg,#00ff7f33,#00ff7f22);
         color: #000;
@@ -38,15 +46,20 @@ st.markdown(
         box-shadow: 0 0 12px rgba(0,255,127,0.10), inset 0 0 6px rgba(0,255,127,0.03);
         font-weight: 600;
     }
+
     .neon-btn:hover {
         box-shadow: 0 0 24px rgba(0,255,127,0.18), inset 0 0 8px rgba(0,255,127,0.06);
     }
+
+    /* Dashboard card */
     .card {
         background: rgba(255,255,255,0.02);
         padding: 14px;
         border-radius: 12px;
         border: 1px solid rgba(0,255,127,0.06);
     }
+
+    /* Chat area wrapper */
     .chat-area {
         background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005));
         border-radius: 12px;
@@ -55,6 +68,8 @@ st.markdown(
         overflow-y: auto;
         border: 1px solid rgba(0,255,127,0.04);
     }
+
+    /* Chat bubble styles */
     .bubble-user {
         background: linear-gradient(90deg,#003e13,#1b5e20);
         color: #eafff0;
@@ -67,6 +82,7 @@ st.markdown(
         box-shadow: 0 6px 18px rgba(0,0,0,0.6), 0 0 16px rgba(0,255,127,0.06);
         animation: pulseIn 0.9s ease-out;
     }
+
     .bubble-bot {
         background: linear-gradient(90deg,#134b2b,#2e7d32);
         color: #eafff0;
@@ -79,15 +95,26 @@ st.markdown(
         box-shadow: 0 6px 18px rgba(0,0,0,0.6), 0 0 12px rgba(0,255,127,0.06);
         animation: pulseIn 0.9s ease-out;
     }
+
+    /* Neon outline for active chat page header */
     .neon-header {
         color: #bfffc2;
         text-shadow: 0 0 8px rgba(0,255,127,0.18);
     }
+
+    @keyframes pulseGlow {
+        0% { box-shadow: 0 0 6px rgba(0,255,127,0.06); }
+        50% { box-shadow: 0 0 18px rgba(0,255,127,0.16); }
+        100% { box-shadow: 0 0 6px rgba(0,255,127,0.06); }
+    }
+
     @keyframes pulseIn {
-        0% { transform: translateY(6px); opacity: 0; }
+        0% { transform: translateY(6px); opacity: 0; box-shadow: 0 0 4px rgba(0,255,127,0.02); }
         60% { transform: translateY(0px); opacity: 1; }
         100% { transform: translateY(0px); opacity: 1; }
     }
+
+    /* small helper for memory badge */
     .memory-badge {
         background: rgba(0,255,127,0.08);
         color: #bfffc2;
@@ -97,6 +124,8 @@ st.markdown(
         display:inline-block;
         margin-bottom:8px;
     }
+
+    /* download button container */
     .download-area {
         margin-top: 8px;
     }
@@ -116,7 +145,7 @@ if page == "🏠 Dashboard":
     st.title("🧠 CSE Learning Path Dashboard", anchor=None)
     st.markdown("<div class='card'>Track your progress, courses, and overall growth in Computer Science.</div>", unsafe_allow_html=True)
 
-    # Overall Progress Gauge
+    # Overall Progress Gauge (neon colors)
     st.subheader("🎯 Overall Progress")
     gauge_fig = go.Figure(go.Indicator(
         mode="gauge+number",
@@ -145,8 +174,6 @@ if page == "🏠 Dashboard":
     with col3:
         st.button("🌐 Web Dev", key="dash_web_btn")
     with col4:
-        if "show_more_courses" not in st.session_state:
-            st.session_state.show_more_courses = False
         if st.button("More Courses ▼" if not st.session_state.show_more_courses else "Hide Courses ▲", key="dash_more_btn"):
             st.session_state.show_more_courses = not st.session_state.show_more_courses
 
@@ -161,25 +188,28 @@ if page == "🏠 Dashboard":
             st.button(c, key=f"extra_course_{i}")
         st.markdown("---")
 
-    # Weekly Progress
+    # Weekly Progress (neon bar)
     st.subheader("📆 Weekly Progress")
     weeks = ["Week 1", "Week 2", "Week 3", "Week 4"]
     progress = [70, 82, 90, 100]
     bar_fig = go.Figure(go.Bar(
-        x=weeks, y=progress, text=progress, textposition='auto',
+        x=weeks,
+        y=progress,
+        text=progress,
+        textposition='auto',
         marker_color=['#00FF7F']*len(progress)
     ))
-    bar_fig.update_layout(title="Weekly Growth Chart", paper_bgcolor='rgba(0,0,0,0)',
-                          plot_bgcolor='rgba(0,0,0,0)', font_color='#bfffc2', height=380)
+    bar_fig.update_layout(title="Weekly Growth Chart", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color='#bfffc2', height=380)
     st.plotly_chart(bar_fig, use_container_width=True)
 
     # Course table
     st.subheader("📈 Detailed Course Progress")
-    df = pd.DataFrame({
+    course_data = {
         "Course": ["Python", "C++", "Web Development", "AI", "Data Science", "Machine Learning", "Cybersecurity"],
         "Completion %": [85, 60, 75, 40, 55, 45, 30],
         "Status": ["Completed", "In Progress", "In Progress", "Not Started", "In Progress", "In Progress", "Not Started"]
-    })
+    }
+    df = pd.DataFrame(course_data)
     try:
         st.dataframe(df.style.background_gradient(cmap="Greens"), use_container_width=True)
     except Exception:
@@ -194,28 +224,33 @@ if page == "🏠 Dashboard":
 elif page == "🤖 Chat Assistant":
     st.markdown("<h2 class='neon-header'>🤖 Neon Chat Assistant</h2>", unsafe_allow_html=True)
     st.markdown("<div style='color:#bfffc2;'>Futuristic black + neon green. Topic memory ON. Type 'bye' to reset topic memory.</div>", unsafe_allow_html=True)
+    st.markdown("")
 
-    # Quick starter buttons
+    # Quick starters
     c1, c2, c3, c4 = st.columns(4)
-    if c1.button("💪 Motivate Me"):
+    if c1.button("💪 Motivate Me", key="starter_motivate"):
         st.session_state.chat_history.append(("user", "motivate me", pd.Timestamp.utcnow().isoformat()))
         st.session_state.chat_history.append(("bot", "🔥 Keep pushing — small steps every day!", pd.Timestamp.utcnow().isoformat()))
-    if c2.button("🐍 Python Tip"):
+    if c2.button("🐍 Python Tip", key="starter_python"):
         st.session_state.chat_history.append(("user", "tell me about python", pd.Timestamp.utcnow().isoformat()))
         st.session_state.chat_history.append(("bot", "🐍 Use list comprehensions for concise, fast loops.", pd.Timestamp.utcnow().isoformat()))
         st.session_state.topic_memory = "python"
-    if c3.button("🧠 AI Info"):
+    if c3.button("🧠 AI Info", key="starter_ai"):
         st.session_state.chat_history.append(("user", "tell me about ai", pd.Timestamp.utcnow().isoformat()))
         st.session_state.chat_history.append(("bot", "🤖 Start with NumPy & Pandas — clean data first.", pd.Timestamp.utcnow().isoformat()))
         st.session_state.topic_memory = "ai"
-    if c4.button("🌐 Web Help"):
+    if c4.button("🌐 Web Help", key="starter_web"):
         st.session_state.chat_history.append(("user", "help with web dev", pd.Timestamp.utcnow().isoformat()))
         st.session_state.chat_history.append(("bot", "🌐 Learn Flexbox & Grid to build responsive layouts.", pd.Timestamp.utcnow().isoformat()))
         st.session_state.topic_memory = "web"
 
-    if st.button("🧹 Clear Chat History"):
+    st.markdown("")  # spacing
+
+    # Clear chat history
+    if st.button("🧹 Clear Chat History", key="clear_chat"):
         st.session_state.chat_history = []
         st.session_state.topic_memory = None
+        st.session_state.download_blob = None
         st.success("Chat cleared.")
 
     # Chat display area
@@ -223,21 +258,40 @@ elif page == "🤖 Chat Assistant":
     if st.session_state.topic_memory:
         st.markdown(f"<div class='memory-badge'>🧠 Current Topic: {st.session_state.topic_memory.title()}</div>", unsafe_allow_html=True)
 
+    # Render chat messages
     for sender, message, ts in st.session_state.chat_history:
-        time_str = pd.Timestamp(ts).strftime("%Y-%m-%d %H:%M:%S UTC")
+        # Show timestamp on small faint text
+        try:
+            time_str = pd.Timestamp(ts).strftime("%Y-%m-%d %H:%M:%S UTC")
+        except Exception:
+            time_str = ts
         if sender == "user":
-            st.markdown(f"<div style='text-align:right'><div class='bubble-user'><b>You:</b> {message}</div><div style='font-size:10px;color:#8fffbf;margin-top:4px'>{time_str}</div></div>", unsafe_allow_html=True)
+            st.markdown(f"""
+                <div style='text-align:right'>
+                    <div class='bubble-user'><b>You:</b> {st.to_html(message) if hasattr(st,'to_html') else message}</div>
+                    <div style='font-size:10px;color:#8fffbf;margin-top:4px'>{time_str}</div>
+                </div>
+            """, unsafe_allow_html=True)
         else:
-            st.markdown(f"<div style='text-align:left'><div class='bubble-bot'><b>Assistant:</b> {message}</div><div style='font-size:10px;color:#8fffbf;margin-top:4px'>{time_str}</div></div>", unsafe_allow_html=True)
+            st.markdown(f"""
+                <div style='text-align:left'>
+                    <div class='bubble-bot'><b>Assistant:</b> {st.to_html(message) if hasattr(st,'to_html') else message}</div>
+                    <div style='font-size:10px;color:#8fffbf;margin-top:4px'>{time_str}</div>
+                </div>
+            """, unsafe_allow_html=True)
+
     st.markdown("</div>", unsafe_allow_html=True)
 
+    # Input area (text_input + Send button)
     user_text = st.text_input("Type your message here...", key="user_input_text")
     send_clicked = st.button("Send", key="send_btn")
 
-    # -------- Enhanced Reply Generator --------
+    # -------- Enhanced Reply Generator (with fun facts & challenges) --------
     def generate_bot_reply(user_msg: str) -> str:
+        """Enhanced conversational reply generator with topic memory and more variety."""
         msg = user_msg.lower().strip()
 
+        # --- Response Pools ---
         motivational = [
             "⚡ Keep coding — greatness compiles over time!",
             "🚀 Every bug you fix powers your journey.",
@@ -246,6 +300,7 @@ elif page == "🤖 Chat Assistant":
             "💪 Remember: progress, not perfection.",
             "✨ Don’t stop when you’re tired; stop when you’re proud!"
         ]
+
         python_pool = [
             "🐍 Python tip: use list comprehensions for concise loops.",
             "💡 Use `enumerate()` and `zip()` to simplify loops elegantly.",
@@ -254,6 +309,7 @@ elif page == "🤖 Chat Assistant":
             "🧩 Did you know? `f-strings` are faster than `format()`!",
             "🐢 Start small — build a to-do app or a calculator project!"
         ]
+
         ai_pool = [
             "🤖 Start with NumPy & Pandas to prep your data.",
             "🧠 Learn the math behind ML — linear algebra & stats are key.",
@@ -262,6 +318,7 @@ elif page == "🤖 Chat Assistant":
             "💭 Ever explored how neural networks mimic human learning?",
             "🧬 AI isn’t magic — it’s just math, data, and persistence!"
         ]
+
         web_pool = [
             "🌐 Build a personal portfolio — HTML + CSS + JS to start.",
             "💫 Learn CSS Grid / Flexbox for responsive layouts.",
@@ -270,6 +327,7 @@ elif page == "🤖 Chat Assistant":
             "🪄 Use animations and transitions to bring life to your UI.",
             "🌈 Start small — a landing page is a perfect first project!"
         ]
+
         jokes = [
             "😂 Why do programmers prefer dark mode? Because light attracts bugs!",
             "🤣 Debugging: where you are both the detective and the culprit.",
@@ -277,6 +335,25 @@ elif page == "🤖 Chat Assistant":
             "🧠 Programmer’s diet: coffee, pizza, and more coffee!",
             "💻 I would tell you a UDP joke… but you might not get it."
         ]
+
+        # Fun facts and coding challenges
+        fun_facts = [
+            "💡 Fun fact: The first computer bug was a real moth found in a Harvard computer in 1947!",
+            "🤯 Did you know? Python was named after 'Monty Python', not the snake!",
+            "📡 The first website ever made is still online — created by Tim Berners-Lee in 1991!",
+            "🧬 The Apollo 11 guidance computer had far less memory than a modern phone.",
+            "💾 The floppy disk icon 💾 still represents 'save', even though most people have never used one."
+        ]
+
+        coding_challenges = [
+            "🧩 Challenge: Write a Python function that reverses a string without using [::-1].",
+            "⚙️ Task: Create a calculator that can perform +, -, ×, ÷ operations from user input.",
+            "🚀 Try making a to-do list app with Streamlit!",
+            "💻 Write a program that counts how many vowels are in a sentence.",
+            "🔢 Challenge: Generate Fibonacci numbers using recursion.",
+            "🧠 Bonus: Build a simple chatbot that replies to greetings!"
+        ]
+
         greetings = [
             "👋 Hey there! How’s your learning journey going?",
             "✨ Hi! Ready to dive into something new today?",
@@ -284,6 +361,7 @@ elif page == "🤖 Chat Assistant":
             "👽 Welcome back, code explorer!",
             "😄 Hey! Let’s make something awesome today."
         ]
+
         random_comments = [
             "💬 That’s interesting! Tell me more.",
             "🤔 Hmm, sounds like you’re thinking deeply — I like that.",
@@ -292,6 +370,7 @@ elif page == "🤖 Chat Assistant":
             "💡 Every chat adds a spark of knowledge!"
         ]
 
+        # --- Keyword Detection ---
         if any(k in msg for k in ["hello", "hi", "hey", "hola", "yo"]):
             st.session_state.topic_memory = "greetings"
             return random.choice(greetings)
@@ -310,10 +389,17 @@ elif page == "🤖 Chat Assistant":
         if any(k in msg for k in ["joke", "funny", "laugh"]):
             st.session_state.topic_memory = "jokes"
             return random.choice(jokes)
+        if any(k in msg for k in ["fact", "fun fact"]):
+            st.session_state.topic_memory = "facts"
+            return random.choice(fun_facts)
+        if any(k in msg for k in ["challenge", "task", "problem"]):
+            st.session_state.topic_memory = "challenges"
+            return random.choice(coding_challenges)
         if any(k in msg for k in ["bye", "goodnight", "see you", "exit"]):
             st.session_state.topic_memory = None
             return "👋 Bye! Topic memory cleared — take care and keep learning!"
 
+        # fallback: continue with topic memory if present
         topic = st.session_state.topic_memory
         if topic == "python":
             return random.choice(python_pool)
@@ -325,32 +411,50 @@ elif page == "🤖 Chat Assistant":
             return random.choice(motivational)
         if topic == "jokes":
             return random.choice(jokes)
+        if topic == "facts":
+            return random.choice(fun_facts)
+        if topic == "challenges":
+            return random.choice(coding_challenges)
         if topic == "greetings":
             return random.choice(random_comments)
 
-        general_fallbacks = [
-            "✨ Tell me what you’d like to learn: Python, AI, or Web?",
-            "🚀 Want a quick coding challenge or a new project idea?",
-            "💬 I can share tips, study plans, or tech facts — what do you want?",
-            "🔮 Curious question! Can you tell me more?",
+        # general fallback responses
+        return random.choice([
+            "✨ Tell me what you'd like to learn: Python, AI, or Web?",
+            "🚀 Want a quick coding challenge?",
+            "💬 I can give tips, a study plan, or a small project idea — what do you prefer?",
+            "🔎 Ask me for a fun fact or a coding challenge anytime!",
             "🌱 Learning never stops — what’s your focus this week?"
-        ]
-        return random.choice(general_fallbacks)
+        ])
 
-    # Handle chat send
+    # When Send is clicked: append and rerun (clears input safely)
     if send_clicked and user_text and user_text.strip():
+        # append user's message + timestamp
         st.session_state.chat_history.append(("user", user_text.strip(), pd.Timestamp.utcnow().isoformat()))
+        # generate reply
         with st.spinner("Assistant is typing..."):
             time.sleep(np.random.uniform(0.45, 0.95))
             reply = generate_bot_reply(user_text.strip())
             st.session_state.chat_history.append(("bot", reply, pd.Timestamp.utcnow().isoformat()))
+        # force rerun so the text_input is cleared visually and UI updates
         st.experimental_rerun()
 
+    # Save Chat History (manual): prepare CSV blob when button clicked
     st.markdown("---")
-    if st.button("💾 Save Chat History"):
+    if st.button("💾 Save Chat History", key="save_chat_btn"):
         if st.session_state.chat_history:
             chat_df = pd.DataFrame(st.session_state.chat_history, columns=["Sender", "Message", "Timestamp"])
-            st.session_state.download_blob = chat_df.to_csv(index=False).encode("utf-8")
-            st.download_button("⬇️ Download CSV", st.session_state.download_blob, file_name="chat_history.csv", mime="text/csv", use_container_width=True)
+            csv_bytes = chat_df.to_csv(index=False).encode("utf-8")
+            st.session_state.download_blob = csv_bytes
+            st.success("Chat prepared — click the download button below.")
         else:
-            st.warning("No chat history to download.")
+            st.info("No chat to save yet. Start a conversation first.")
+
+    # Show download button only when blob ready
+    if st.session_state.download_blob:
+        st.markdown("<div class='download-area'>", unsafe_allow_html=True)
+        st.download_button(label="⬇️ Download Chat as CSV", data=st.session_state.download_blob, file_name="chat_history.csv", mime="text/csv", use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown("")
+    st.markdown("<div style='color:#bfffc2;text-align:center'>Neon Chat • Developed by Anish © 2025</div>", unsafe_allow_html=True)
