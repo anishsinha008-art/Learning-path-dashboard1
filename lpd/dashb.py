@@ -291,27 +291,6 @@ def generate_bot_reply(user_msg: str, mode: str = None) -> str:
     # fallback
     return simulated_llm_reply(user_msg, mode)
 
-# ------------------ Code runner (safe-ish) ------------------
-def run_code_snippet(code: str, timeout=5):
-    """
-    Run python code in a subprocess for safety. Returns (stdout, stderr, timed_out_flag).
-    ⚠️ WARNING: this executes code on the host machine. Only enable in trusted environments.
-    """
-    # create a temporary file and run it with python -c
-    try:
-        # Using subprocess with shell disabled and timeout
-        proc = subprocess.run(
-            [shlex.split("python -c")[0], "-c", code],
-            capture_output=True,
-            text=True,
-            timeout=timeout
-        )
-        return proc.stdout, proc.stderr, False
-    except subprocess.TimeoutExpired:
-        return "", "Execution timed out.", True
-    except Exception as e:
-        return "", f"Execution failed: {e}", False
-
 # ------------------ UI Styles ------------------
 NEON_CSS = """
 <style>
