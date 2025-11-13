@@ -1,220 +1,198 @@
-# app.py — Enhanced Neon Edition (Debugged + Improved)
+# learning_dashboard.py
+# 🚀 Enhanced Learning Path Dashboard — Cyber Blue Theme (Debugged & Optimized)
+
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
-import random
-import time
-from io import BytesIO
+import json
+import os
+from datetime import datetime
 
 # ------------------ PAGE CONFIG ------------------
 st.set_page_config(page_title="CSE Learning Path Dashboard", layout="wide")
 
-# ------------------ SESSION STATE DEFAULTS ------------------
-for key, default in {
-    "chat_history": [],
-    "topic_memory": None,
-    "download_blob": None,
-    "show_more_courses": False,
-}.items():
-    if key not in st.session_state:
-        st.session_state[key] = default
+# ------------------ FILE PATHS ------------------
+DATA_FILE = "learning_data.json"
 
-# ------------------ GLOBAL NEON THEME STYLES ------------------
+# ------------------ LOAD / SAVE FUNCTIONS ------------------
+def load_data():
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "r") as f:
+            return json.load(f)
+    return {"courses": [], "planner": [], "chat_history": []}
+
+def save_data(data):
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f, indent=4)
+
+# ------------------ INITIALIZE SESSION STATE ------------------
+if "data" not in st.session_state:
+    st.session_state.data = load_data()
+if "selected_course" not in st.session_state:
+    st.session_state.selected_course = None
+
+data = st.session_state.data
+
+# ------------------ CYBER BLUE THEME CSS ------------------
 st.markdown(
     """
     <style>
-    .stApp { background: #000; color: #bfffc2; font-family: 'Trebuchet MS', sans-serif; }
-    h1, h2, h3 { color: #bfffc2; text-shadow: 0 0 8px rgba(0,255,127,0.25); }
-    .neon-btn {
-        background: linear-gradient(90deg,#00ff7f33,#00ff7f22);
-        color: #bfffc2; font-weight: 600;
-        padding: 8px 14px; border-radius: 10px;
-        border: 1px solid rgba(0,255,127,0.35);
-        box-shadow: 0 0 8px rgba(0,255,127,0.2);
+    body {
+        background-color: #0b0f1a;
+        color: #cfe3ff;
+        font-family: 'Poppins', sans-serif;
+    }
+    .stButton > button {
+        background: linear-gradient(90deg, #00bfff, #0066ff);
+        color: white;
+        border-radius: 12px;
+        border: none;
+        font-weight: bold;
         transition: 0.3s;
     }
-    .neon-btn:hover { box-shadow: 0 0 16px rgba(0,255,127,0.4); }
-    .card {
-        background: rgba(255,255,255,0.03);
-        padding: 14px; border-radius: 12px;
-        border: 1px solid rgba(0,255,127,0.06);
+    .stButton > button:hover {
+        background: linear-gradient(90deg, #0066ff, #00bfff);
+        transform: scale(1.05);
     }
-    .chat-area {
-        background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
-        border-radius: 12px; padding: 14px;
-        max-height: 62vh; overflow-y: auto;
-        border: 1px solid rgba(0,255,127,0.06);
+    .stTextInput > div > div > input {
+        background-color: #10172a;
+        color: white;
+        border-radius: 8px;
     }
-    .bubble-user, .bubble-bot {
-        padding: 10px 14px; border-radius: 14px; margin: 6px 0;
-        display: inline-block; max-width: 85%;
-        animation: fadeIn 0.8s ease-out;
-        box-shadow: 0 0 12px rgba(0,255,127,0.08);
-    }
-    .bubble-user {
-        background: linear-gradient(90deg,#003e13,#1b5e20);
-        text-align: right; color: #eafff0; float: right;
-    }
-    .bubble-bot {
-        background: linear-gradient(90deg,#134b2b,#2e7d32);
-        text-align: left; color: #eafff0; float: left;
-    }
-    @keyframes fadeIn {
-        0% { opacity: 0; transform: translateY(6px); }
-        100% { opacity: 1; transform: translateY(0); }
-    }
-    .neon-header { text-align:center; color:#bfffc2; margin-bottom:10px; }
-    .memory-badge {
-        background: rgba(0,255,127,0.08);
-        color: #bfffc2; padding: 5px 10px; border-radius: 8px;
-        display: inline-block; margin-bottom: 10px;
-    }
-    .glow-line {
-        width: 100%; height: 1px; margin: 10px 0;
-        background: linear-gradient(90deg, transparent, #00ff7f55, transparent);
+    .metric-box {
+        background: rgba(0, 102, 255, 0.1);
+        padding: 15px;
+        border-radius: 10px;
+        text-align: center;
     }
     </style>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
-# ------------------ SIDEBAR ------------------
-st.sidebar.title("☰ Menu")
-page = st.sidebar.radio("Navigate:", ["🏠 Dashboard", "🤖 Chat Assistant"])
+# ------------------ HEADER ------------------
+st.title("💻 CSE Learning Path Dashboard")
+st.subheader("🚀 Empower your learning journey with interactive progress tracking")
 
-# =====================================================
-# PAGE 1: DASHBOARD
-# =====================================================
-if page == "🏠 Dashboard":
-    st.title("🧠 CSE Learning Path Dashboard")
-    st.markdown("<div class='card'>Track your progress, courses, and growth in Computer Science.</div>", unsafe_allow_html=True)
+# ------------------ ADD NEW COURSE ------------------
+st.sidebar.header("📘 Add New Course")
+course_name = st.sidebar.text_input("Course Name")
+total_topics = st.sidebar.number_input("Total Topics", min_value=1, max_value=100, value=10)
+if st.sidebar.button("Add Course"):
+    new_course = {"name": course_name, "progress": 0, "topics": total_topics}
+    data["courses"].append(new_course)
+    save_data(data)
+    st.sidebar.success(f"Course '{course_name}' added!")
 
-    # Gauge with centered value
-    st.subheader("🎯 Overall Progress")
-    overall_progress = random.randint(60, 95)
-    gauge_fig = go.Figure(go.Indicator(
+# ------------------ COURSE SELECTION ------------------
+course_names = [c["name"] for c in data["courses"]]
+if course_names:
+    selected_course = st.selectbox("Select a Course", course_names)
+    course = next((c for c in data["courses"] if c["name"] == selected_course), None)
+else:
+    st.warning("No courses added yet. Please add a course in the sidebar.")
+    st.stop()
+
+# ------------------ PROGRESS TRACKER ------------------
+st.subheader(f"📊 Progress — {course['name']}")
+
+progress = st.slider("Update your progress (%)", 0, 100, course["progress"])
+if progress != course["progress"]:
+    course["progress"] = progress
+    save_data(data)
+
+# Gauge chart (progress in center)
+fig = go.Figure(
+    go.Indicator(
         mode="gauge+number",
-        value=overall_progress,
-        number={'font': {'size': 44, 'color': '#00FF7F'}},
-        title={'text': "Total Completion", 'font': {'color': '#bfffc2'}},
+        value=course["progress"],
+        title={"text": "Progress", "font": {"size": 20}},
         gauge={
-            'axis': {'range': [0, 100], 'tickcolor': '#bfffc2'},
-            'bar': {'color': "#00FF7F"},
-            'bgcolor': "rgba(0,0,0,0)",
-            'steps': [
-                {'range': [0, 50], 'color': "rgba(0,255,127,0.05)"},
-                {'range': [50, 100], 'color': "rgba(0,255,127,0.10)"}
+            "axis": {"range": [0, 100]},
+            "bar": {"color": "#00bfff"},
+            "bgcolor": "#0b0f1a",
+            "borderwidth": 2,
+            "bordercolor": "#0066ff",
+            "steps": [
+                {"range": [0, 50], "color": "#102030"},
+                {"range": [50, 100], "color": "#0b1f3a"},
             ],
-        }
-    ))
-    gauge_fig.update_layout(height=300, paper_bgcolor='rgba(0,0,0,0)', font_color='#bfffc2')
-    st.plotly_chart(gauge_fig, use_container_width=True)
+        },
+        number={"font": {"color": "#00bfff", "size": 40}},
+    )
+)
+fig.update_layout(height=250, margin=dict(t=0, b=0, l=0, r=0))
+st.plotly_chart(fig, use_container_width=True)
 
-    # Courses
-    st.subheader("📚 Course Completion Overview")
-    c1, c2, c3, c4 = st.columns([1, 1, 1, 0.7])
-    for name, key in zip(["🐍 Python", "💻 C++", "🌐 Web Dev"], ["py", "cpp", "web"]):
-        c1.button(name, key=f"btn_{key}")
-    if c4.button("More ▼" if not st.session_state.show_more_courses else "Hide ▲"):
-        st.session_state.show_more_courses = not st.session_state.show_more_courses
+# ------------------ COURSE METRICS ------------------
+cols = st.columns(3)
+with cols[0]:
+    st.markdown(
+        f"<div class='metric-box'><h4>Total Topics</h4><h2>{course['topics']}</h2></div>",
+        unsafe_allow_html=True,
+    )
+with cols[1]:
+    completed = int(course['topics'] * course['progress'] / 100)
+    st.markdown(
+        f"<div class='metric-box'><h4>Completed</h4><h2>{completed}</h2></div>",
+        unsafe_allow_html=True,
+    )
+with cols[2]:
+    remaining = course['topics'] - completed
+    st.markdown(
+        f"<div class='metric-box'><h4>Remaining</h4><h2>{remaining}</h2></div>",
+        unsafe_allow_html=True,
+    )
 
-    if st.session_state.show_more_courses:
-        st.markdown("<div class='glow-line'></div>", unsafe_allow_html=True)
-        for c in ["🤖 AI", "📊 Data Science", "🧩 ML", "🕹️ Game Dev", "📱 App Dev", "⚙️ DSA", "☁️ Cloud", "🔒 Cybersecurity"]:
-            st.button(c)
-        st.markdown("<div class='glow-line'></div>", unsafe_allow_html=True)
+# ------------------ PLANNER ------------------
+st.subheader("🗓️ Study Planner")
+task = st.text_input("Add a new task")
+if st.button("Add Task"):
+    if task:
+        data["planner"].append({"task": task, "done": False, "created": str(datetime.now())})
+        save_data(data)
+        st.success("Task added!")
 
-    # Weekly progress chart
-    st.subheader("📆 Weekly Progress")
-    weeks = ["Week 1", "Week 2", "Week 3", "Week 4"]
-    progress = [random.randint(60, 100) for _ in weeks]
-    bar_fig = go.Figure(go.Bar(
-        x=weeks, y=progress, text=progress, textposition='auto', marker_color=['#00FF7F']*len(progress)
-    ))
-    bar_fig.update_layout(title="Weekly Growth Chart", paper_bgcolor='rgba(0,0,0,0)',
-                          plot_bgcolor='rgba(0,0,0,0)', font_color='#bfffc2', height=350)
-    st.plotly_chart(bar_fig, use_container_width=True)
+if data["planner"]:
+    for i, t in enumerate(data["planner"]):
+        cols = st.columns([0.05, 0.7, 0.25])
+        done = cols[0].checkbox("", t["done"], key=f"task_{i}")
+        cols[1].write(f"{'✅ ' if done else '🕒 '}{t['task']}")
+        if cols[2].button("❌ Remove", key=f"remove_{i}"):
+            data["planner"].pop(i)
+            save_data(data)
+            st.experimental_rerun()
+        if done != t["done"]:
+            t["done"] = done
+            save_data(data)
 
-    # Data table
-    st.subheader("📈 Detailed Course Progress")
-    df = pd.DataFrame({
-        "Course": ["Python", "C++", "Web Dev", "AI", "DS", "ML", "Cybersecurity"],
-        "Completion %": [85, 60, 75, 40, 55, 45, 30],
-        "Status": ["Completed", "In Progress", "In Progress", "Not Started", "In Progress", "In Progress", "Not Started"]
-    })
-    st.dataframe(df.style.background_gradient(cmap="Greens"), use_container_width=True)
+# ------------------ CHATBOT SIMULATION ------------------
+st.subheader("💬 Motivator Bot")
+prompt = st.text_input("Say something to your motivator bot")
+if st.button("Send"):
+    responses = [
+        "Keep going! You’re doing amazing! 🚀",
+        "Every step counts — progress is power. 💪",
+        "Don’t give up now; success is closer than you think! 🌟",
+        "Your effort defines your excellence. 🔥",
+    ]
+    reply = np.random.choice(responses)
+    st.session_state.data["chat_history"].append({"user": prompt, "bot": reply})
+    save_data(st.session_state.data)
 
-    st.markdown("<hr>", unsafe_allow_html=True)
-    st.markdown("<div style='text-align:center;color:#bfffc2;'>Developed by Anish | Neon Dashboard © 2025</div>", unsafe_allow_html=True)
+if data["chat_history"]:
+    for chat in reversed(data["chat_history"][-5:]):
+        st.markdown(f"**You:** {chat['user']}")
+        st.markdown(f"**Bot:** {chat['bot']}")
 
-# =====================================================
-# PAGE 2: CHAT ASSISTANT
-# =====================================================
-elif page == "🤖 Chat Assistant":
-    st.markdown("<h2 class='neon-header'>🤖 Neon Chat Assistant</h2>", unsafe_allow_html=True)
-    st.caption("Type 'bye' to clear memory • Futuristic Black + Neon Green Mode")
-
-    # Quick Starters
-    cols = st.columns(4)
-    starters = {
-        "💪 Motivate": "motivate me",
-        "🐍 Python Tip": "python tips",
-        "🧠 AI Info": "tell me about ai",
-        "🌐 Web Help": "help with web dev",
-    }
-    for (label, msg), col in zip(starters.items(), cols):
-        if col.button(label):
-            st.session_state.chat_history.append(("user", msg, pd.Timestamp.utcnow().isoformat()))
-            st.session_state.chat_history.append(("bot", "✅ Got it! Let's dive in.", pd.Timestamp.utcnow().isoformat()))
-
-    # Clear chat
-    if st.button("🧹 Clear Chat History"):
-        st.session_state.chat_history.clear()
-        st.session_state.topic_memory = None
-        st.session_state.download_blob = None
-        st.toast("Chat cleared!", icon="🧽")
-
-    # Chat display
-    st.markdown("<div class='chat-area'>", unsafe_allow_html=True)
-    if st.session_state.topic_memory:
-        st.markdown(f"<div class='memory-badge'>🧠 Topic: {st.session_state.topic_memory.title()}</div>", unsafe_allow_html=True)
-
-    for sender, msg, ts in st.session_state.chat_history:
-        timestamp = pd.Timestamp(ts).strftime("%H:%M:%S")
-        bubble_class = "bubble-user" if sender == "user" else "bubble-bot"
-        align = "right" if sender == "user" else "left"
-        st.markdown(
-            f"<div style='text-align:{align}'><div class='{bubble_class}'><b>{sender.title()}:</b> {msg}</div><br><small style='color:#8fffbf'>{timestamp}</small></div>",
-            unsafe_allow_html=True
-        )
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # Input and send
-    user_text = st.text_input("Type your message:", key="chat_input")
-    if st.button("Send"):
-        if user_text.strip():
-            st.session_state.chat_history.append(("user", user_text.strip(), pd.Timestamp.utcnow().isoformat()))
-
-            # Typing effect
-            with st.spinner("Assistant is typing..."):
-                time.sleep(random.uniform(0.5, 1.2))
-
-            # Simplified smart reply
-            def quick_reply(msg):
-                low = msg.lower()
-                if "python" in low: return "🐍 Use list comprehensions—they’re elegant and fast!"
-                if "ai" in low: return "🤖 AI is about learning patterns—start with Scikit-learn!"
-                if "web" in low: return "🌐 HTML + CSS + JS form the holy trinity of web dev."
-                if "motivate" in low: return random.choice(["💪 Keep going!", "🚀 You’re leveling up!", "🔥 Progress > Perfection!"])
-                if "bye" in low: 
-                    st.session_state.topic_memory = None
-                    return "👋 Goodbye! Memory cleared."
-                return random.choice(["✨ Keep exploring!", "💡 Ask me a coding fact!", "🧩 Want a small challenge?"])
-            
-            reply = quick_reply(user_text)
-            st.session_state.chat_history.append(("bot", reply, pd.Timestamp.utcnow().isoformat()))
-            st.rerun()
-
-    st.markdown("<hr>", unsafe_allow_html=True)
-    st.markdown("<div style='text-align:center;color:#bfffc2;'>Neon Chat • Developed by Anish © 2025</div>", unsafe_allow_html=True)
+# ------------------ FOOTER ------------------
+st.markdown(
+    """
+    <hr>
+    <center>
+    <p style='color:#4fc3f7;'>Made with 💙 by your AI Learning Assistant</p>
+    </center>
+    """,
+    unsafe_allow_html=True,
+)
