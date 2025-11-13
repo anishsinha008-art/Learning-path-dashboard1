@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -121,6 +122,7 @@ def tts_speak(text: str):
 # If OpenAI key is provided, we will use it for better summarization and replies.
 # Otherwise, fall back to a compact heuristic summarizer.
 
+
 def summarize_memory(remote=False, max_chars=1000):
     """Return a concise summary of recent chat messages."""
     msgs = st.session_state.chat_history
@@ -142,6 +144,7 @@ def summarize_memory(remote=False, max_chars=1000):
 
 
 # ------------------ EXTERNAL LLM / DEEPSEEK SCAFFOLD ------------------
+
 
 def call_openai_chat(api_key: str, system_prompt: str, user_prompt: str):
     """Scaffold to call OpenAI Chat API if openai package is available.
@@ -167,18 +170,65 @@ def call_openai_chat(api_key: str, system_prompt: str, user_prompt: str):
 
 
 def call_deepseek(api_key: str, user_prompt: str):
-    """Scaffold for DeepSeek R1-style API call. Adjust endpoint & payload per provider docs.
-    This function returns the text response or None on failure.
+    """Call DeepSeek's production chat endpoint. The function will try these sources for the API key in order:
+    1. explicit `api_key` argument
+    2. Streamlit secrets (DEEPSEEK_API_KEY)
+    3. environment variable DEEPSEEK_API_KEY
+
+    Returns the assistant text or None on failure.
     """
+    # prefer explicit key
+    key = api_key or None
+    if not key:
+        try:
+            key = st.secrets.get("DEEPSEEK_API_KEY")
+        except Exception:
+            key = os.getenv("DEEPSEEK_API_KEY")
+    if not key:
+        st.warning("DeepSeek API key not provided. Set .streamlit/secrets.toml or environment variable DEEPSEEK_API_KEY.")
+        return None
+
     try:
-        endpoint = "https://api.deepseek.example/v1/generate"  # <-- replace with real DeepSeek endpoint
-        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-        payload = {"input": user_prompt, "model": "r1-mini", "max_tokens": 400}
-        r = requests.post(endpoint, headers=headers, json=payload, timeout=15)
+        endpoint = "https://api.deepseek.com/v1/chat/completions"
+        headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+        payload = {
+            "model": "deepseek-reasoner",
+            "messages": [
+                {"role": "system", "content": "You are a helpful AI mentor for CSE students."},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": 0.7,
+            "max_tokens": 400,
+        }
+        r = requests.post(endpoint, headers=headers, json=payload, timeout=20)
         r.raise_for_status()
         data = r.json()
-        # adapt to real response shape
-        return data.get('text') or data.get('output') or None
+
+        # Try common response shapes (OpenAI-like)
+        if isinstance(data, dict):
+            choices = data.get("choices")
+            if choices and isinstance(choices, list) and len(choices) > 0:
+                first = choices[0]
+                # message.content style
+                if isinstance(first.get("message"), dict):
+                    return first.get("message").get("content")
+                # choices[0].text style
+                if first.get("text"):
+                    return first.get("text")
+
+            # fallback top-level fields
+            if data.get("text"):
+                return data.get("text")
+            if data.get("output"):
+                return data.get("output")
+
+        # If we didn't return above, give up gracefully
+        st.warning("DeepSeek returned an unexpected response shape.")
+        return None
+
+    except requests.exceptions.RequestException as e:
+        st.warning(f"DeepSeek request failed: {e}")
+        return None
     except Exception as e:
         st.warning(f"DeepSeek call failed: {e}")
         return None
@@ -269,10 +319,18 @@ def generate_bot_reply(user_msg: str, mode: str = None) -> str:
         text = call_openai_chat(st.session_state.api_key, system_prompt, user_msg)
         if text:
             return text
-    if provider == "DeepSeek" and st.session_state.deepseek_key:
-        text = call_deepseek(st.session_state.deepseek_key, user_msg)
-        if text:
-            return text
+    if provider == "DeepSeek":
+        # prefer explicit key, otherwise try secrets/env
+        key = st.session_state.deepseek_key or None
+        if not key:
+            try:
+                key = st.secrets.get("DEEPSEEK_API_KEY")
+            except Exception:
+                key = os.getenv("DEEPSEEK_API_KEY")
+        if key:
+            text = call_deepseek(key, user_msg)
+            if text:
+                return text
 
     # fallback: simulated smarter reply
     return simulated_llm_reply(user_msg, mode)
@@ -573,6 +631,8 @@ elif page == "🤖 AI Mentor (Pro)":
 # ------------------ END ------------------
 # Notes for deployment:
 # - To enable OpenAI: select OpenAI in sidebar and paste your API key. Make sure `openai` Python package is installed in the environment.
-# - To enable DeepSeek: select DeepSeek and paste the DeepSeek API key. Replace the DeepSeek endpoint in call_deepseek with the provider's real endpoint and adapt payload/response parsing.
+# - To enable DeepSeek: add your DeepSeek API key to `.streamlit/secrets.toml` like:
+#     DEEPSEEK_API_KEY = "your_key_here"
+#   or set the environment variable DEEPSEEK_API_KEY. The app will try those automatically.
 # - TTS: gTTS is used to generate MP3 bytes. Install `gTTS` (pip install gTTS) for TTS support. Audio plays via Streamlit's st.audio.
 # - Persistence: app saves local JSON to cse_dashboard_state.json. For Google Sheets/Firestore persistence, add your credentials and implement the respective client; scaffolding comments can be added on request.
