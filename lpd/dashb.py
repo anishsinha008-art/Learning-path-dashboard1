@@ -1,8 +1,7 @@
 # learning_assistant_dashboard.py
 # ----------------------------------------------------------
-# Learning Path Dashboard + AI Learning Assistant (Offline)
-# A Streamlit app for personalized learning tracking
-# and motivational chat assistance (no API required)
+# Learning Path Dashboard + AI Learning Assistant (Randomized Progress)
+# Automatically updates learning progress each refresh
 # ----------------------------------------------------------
 
 import streamlit as st
@@ -10,7 +9,6 @@ import pandas as pd
 import plotly.graph_objects as go
 import random
 import datetime
-import time
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="AI Learning Assistant", layout="wide")
@@ -26,12 +24,7 @@ st.markdown("""
 
 # ---------------- INITIAL STATE ----------------
 if "courses" not in st.session_state:
-    st.session_state.courses = {
-        "Python Fundamentals": 50,
-        "Data Analysis": 70,
-        "Machine Learning": 35,
-        "Web Development": 80,
-    }
+    st.session_state.courses = ["Python Fundamentals", "Data Analysis", "Machine Learning", "Web Development"]
 if "planner" not in st.session_state:
     st.session_state.planner = []
 if "chat_history" not in st.session_state:
@@ -50,34 +43,37 @@ with tab1:
     st.subheader("📊 Learning Progress Overview")
 
     new_course = st.text_input("Add new course")
-    progress = st.slider("Progress (%)", 0, 100, 0, key="progress_slider")
-    if st.button("➕ Add / Update Course"):
+    if st.button("➕ Add Course"):
         if new_course.strip():
-            st.session_state.courses[new_course.strip()] = progress
-            st.success(f"Course '{new_course}' updated!")
+            st.session_state.courses.append(new_course.strip())
+            st.success(f"Course '{new_course}' added!")
         else:
             st.warning("Enter a valid course name.")
 
-    if st.button("🗑️ Reset All Courses"):
-        st.session_state.courses = {}
+    if st.button("🗑️ Reset Courses"):
+        st.session_state.courses = []
         st.warning("All courses have been reset!")
 
     if not st.session_state.courses:
         st.info("Add some courses to visualize your learning progress.")
     else:
+        # Randomize progress every refresh
+        progress_data = {course: random.randint(10, 100) for course in st.session_state.courses}
+
         df = pd.DataFrame({
-            "Course": list(st.session_state.courses.keys()),
-            "Progress": list(st.session_state.courses.values())
+            "Course": list(progress_data.keys()),
+            "Progress": list(progress_data.values())
         })
+
         cols = st.columns(2)
-        for i, (course, val) in enumerate(st.session_state.courses.items()):
+        for i, (course, val) in enumerate(progress_data.items()):
             with cols[i % 2]:
                 fig = go.Figure(go.Indicator(
                     mode="gauge+number",
                     value=val,
                     title={'text': course, 'font': {'size': 18, 'color': '#00bfff'}},
                     gauge={
-                        'axis': {'range': [0, 100], 'tickwidth': 0.5},
+                        'axis': {'range': [0, 100]},
                         'bar': {'color': '#00bfff'},
                         'bgcolor': "#0a0a0a",
                         'steps': [
@@ -89,7 +85,7 @@ with tab1:
                 fig.update_layout(height=250, margin=dict(t=40, b=0))
                 st.plotly_chart(fig, use_container_width=True)
 
-        avg_progress = round(sum(st.session_state.courses.values()) / len(st.session_state.courses), 2)
+        avg_progress = round(sum(progress_data.values()) / len(progress_data), 2)
         st.metric("Average Progress", f"{avg_progress}%")
         if avg_progress < 40:
             st.warning("⚙️ You're getting started — aim for small consistent goals.")
@@ -142,7 +138,6 @@ with tab2:
                     st.warning("Task removed!")
                     st.experimental_rerun()
 
-        # Progress Bar for Planner
         completed_tasks = sum(t["completed"] for t in st.session_state.planner)
         total_tasks = len(st.session_state.planner)
         if total_tasks > 0:
@@ -156,7 +151,7 @@ with tab3:
     st.subheader("💬 AI Motivator Chatbot (Offline)")
     st.caption("Ask for motivation, study tips, or guidance!")
 
-    user_input = st.text_input("You:", placeholder="Type your question or message...")
+    user_input = st.text_input("You:", placeholder="Type your message...")
     if st.button("Send"):
         if user_input.strip():
             responses = [
