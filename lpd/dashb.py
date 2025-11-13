@@ -7,24 +7,81 @@ import time
 # ------------------ PAGE CONFIG ------------------
 st.set_page_config(page_title="CSE Learning Path Dashboard", layout="wide")
 
-# ------------------ INITIAL STATES ------------------
+# ------------------ DARK THEME CSS ------------------
+st.markdown("""
+    <style>
+        body {
+            background-color: #0E1117;
+            color: #FFFFFF;
+        }
+        [data-testid="stAppViewContainer"] {
+            background-color: #0E1117;
+            color: #FFFFFF;
+        }
+        [data-testid="stSidebar"] {
+            background-color: #111827;
+        }
+        [data-testid="stSidebarNav"] button {
+            background: none !important;
+            border: none;
+        }
+        .css-1d391kg, .css-18e3th9 {
+            background-color: #0E1117 !important;
+            color: #FFFFFF !important;
+        }
+        .stButton>button {
+            background-color: #1E3A8A;
+            color: white;
+            border-radius: 10px;
+            border: none;
+            transition: 0.3s;
+        }
+        .stButton>button:hover {
+            background-color: #2563EB;
+        }
+        .metric-box {
+            background-color: #1E293B;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            box-shadow: 0px 0px 10px #00BFFF33;
+        }
+        .chat-user {
+            background-color: #2563EB;
+            color: white;
+            padding: 10px;
+            border-radius: 10px;
+            text-align: right;
+            margin-bottom: 5px;
+        }
+        .chat-bot {
+            background-color: #1E293B;
+            color: #E2E8F0;
+            padding: 10px;
+            border-radius: 10px;
+            text-align: left;
+            margin-bottom: 5px;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+# ------------------ STATE ------------------
 if "page" not in st.session_state:
-    st.session_state.page = "Home"
+    st.session_state.page = "🏠 Home"
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
 # ------------------ SIDEBAR NAVIGATION ------------------
-st.sidebar.title("📘 Navigation")
-menu_choice = st.sidebar.radio(
-    "Go to:", 
-    ["🏠 Home", "📚 Courses", "📆 Weekly Progress", "📈 Detailed Progress", "🤖 AI Chat Assistant"]
+st.sidebar.title("🧭 Navigation")
+page = st.sidebar.radio(
+    "Choose a section:",
+    ["🏠 Home", "📚 Courses", "📆 Weekly Progress", "📈 Insights", "🤖 AI Assistant"]
 )
-
-st.session_state.page = menu_choice
+st.session_state.page = page
 
 # ------------------ HEADER ------------------
-st.title("🧠 CSE Learning Path Dashboard")
-st.markdown("Efficiently track your growth and learning journey in Computer Science!")
+st.title("⚙️ CSE Learning Path Dashboard")
+st.markdown("<p style='color:gray;'>Empowering learners to master Computer Science through smart tracking and insights.</p>", unsafe_allow_html=True)
 
 # ------------------ RANDOM DATA GENERATOR ------------------
 def random_progress_data():
@@ -42,31 +99,30 @@ if st.session_state.page == "🏠 Home":
             'axis': {'range': [0, 100]},
             'bar': {'color': "#00BFFF"},
             'steps': [
-                {'range': [0, 50], 'color': "#f2f2f2"},
-                {'range': [50, 100], 'color': "#d9f2e6"}
+                {'range': [0, 50], 'color': "#222"},
+                {'range': [50, 100], 'color': "#1E3A8A"}
             ]
         }
     ))
-    fig.update_layout(height=300)
+    fig.update_layout(paper_bgcolor="#0E1117", font={'color': 'white'}, height=300)
     st.plotly_chart(fig, use_container_width=True)
 
     st.markdown("### 🚀 Quick Stats")
     col1, col2, col3 = st.columns(3)
-    col1.metric("Active Courses", np.random.randint(3, 8))
-    col2.metric("Average Progress", f"{overall_progress}%")
-    col3.metric("Total Study Hours", f"{np.random.randint(20, 120)} hrs")
-
-    st.info("💡 Tip: Explore 'Courses' to view progress on specific subjects!")
+    with col1:
+        st.markdown(f"<div class='metric-box'><h3>{np.random.randint(3, 8)}</h3><p>Active Courses</p></div>", unsafe_allow_html=True)
+    with col2:
+        st.markdown(f"<div class='metric-box'><h3>{overall_progress}%</h3><p>Average Progress</p></div>", unsafe_allow_html=True)
+    with col3:
+        st.markdown(f"<div class='metric-box'><h3>{np.random.randint(20, 120)} hrs</h3><p>Total Study Time</p></div>", unsafe_allow_html=True)
 
 # ------------------ COURSE PAGE ------------------
 elif st.session_state.page == "📚 Courses":
     st.subheader("📘 Course Overview")
-    st.write("Below are your enrolled courses and their progress levels:")
-
     courses = ["Python", "C++", "Web Development", "AI", "Data Science", "Machine Learning", "Cybersecurity"]
     completion = random_progress_data()
     statuses = [
-        "Completed" if x > 80 else "In Progress" if x > 40 else "Not Started"
+        "✅ Completed" if x > 80 else "🟡 In Progress" if x > 40 else "❌ Not Started"
         for x in completion
     ]
     df = pd.DataFrame({"Course": courses, "Completion %": completion, "Status": statuses})
@@ -78,12 +134,10 @@ elif st.session_state.page == "📚 Courses":
 
 # ------------------ WEEKLY PROGRESS PAGE ------------------
 elif st.session_state.page == "📆 Weekly Progress":
-    st.subheader("📅 Weekly Growth Tracker")
+    st.subheader("📅 Weekly Growth")
     weeks = ["Week 1", "Week 2", "Week 3", "Week 4"]
     progress = np.random.randint(50, 100, size=4)
-
-    fig2 = go.Figure()
-    fig2.add_trace(go.Bar(
+    fig2 = go.Figure(go.Bar(
         x=weeks,
         y=progress,
         text=progress,
@@ -94,75 +148,82 @@ elif st.session_state.page == "📆 Weekly Progress":
         title="Weekly Progress Overview",
         xaxis_title="Weeks",
         yaxis_title="Progress (%)",
-        height=400
+        height=400,
+        paper_bgcolor="#0E1117",
+        font={'color': 'white'}
     )
     st.plotly_chart(fig2, use_container_width=True)
-    st.success("📊 Data updates randomly each refresh — keep tracking consistency!")
 
-# ------------------ DETAILED PROGRESS PAGE ------------------
-elif st.session_state.page == "📈 Detailed Progress":
-    st.subheader("📈 Progress Insights")
-    st.write("Visualize your overall learning performance:")
-
+# ------------------ INSIGHTS PAGE ------------------
+elif st.session_state.page == "📈 Insights":
+    st.subheader("📊 Performance Insights")
     categories = ["Coding", "Theory", "Projects", "Assignments", "Revisions"]
     scores = np.random.randint(40, 100, size=5)
-
     fig3 = go.Figure(go.Scatterpolar(
         r=scores,
         theta=categories,
         fill='toself',
         marker_color="#00BFFF"
     ))
-    fig3.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100])), height=400)
+    fig3.update_layout(
+        polar=dict(
+            bgcolor="#0E1117",
+            radialaxis=dict(visible=True, range=[0, 100], color="gray")
+        ),
+        paper_bgcolor="#0E1117",
+        font={'color': 'white'},
+        height=400
+    )
     st.plotly_chart(fig3, use_container_width=True)
+    st.info("💡 Focus on consistency — your strongest area defines your progress speed!")
 
 # ------------------ AI CHAT ASSISTANT PAGE ------------------
-elif st.session_state.page == "🤖 AI Chat Assistant":
-    st.subheader("🤖 Smart Study Companion")
-    st.markdown("<p style='color:gray;'>Ask for coding tips, motivation, or advice!</p>", unsafe_allow_html=True)
+elif st.session_state.page == "🤖 AI Assistant":
+    st.subheader("🤖 Smart Study Assistant")
+    st.markdown("<p style='color:gray;'>Ask anything about coding, AI, or motivation.</p>", unsafe_allow_html=True)
 
-    cols = st.columns(4)
-    if cols[0].button("💪 Motivate Me"):
+    quicks = st.columns(4)
+    if quicks[0].button("💪 Motivate Me"):
         st.session_state.chat_history.append(("user", "motivate me"))
-    if cols[1].button("🐍 Python Tip"):
+    if quicks[1].button("🐍 Python Tip"):
         st.session_state.chat_history.append(("user", "python tip"))
-    if cols[2].button("🧠 AI Info"):
+    if quicks[2].button("🧠 AI Info"):
         st.session_state.chat_history.append(("user", "tell me about AI"))
-    if cols[3].button("🌐 Web Help"):
+    if quicks[3].button("🌐 Web Help"):
         st.session_state.chat_history.append(("user", "help with web dev"))
 
-    user_input = st.chat_input("Type your message here...")
+    user_input = st.chat_input("💬 Type your message here...")
 
-    def get_bot_response(message):
-        message = message.lower()
+    def get_bot_response(msg):
+        msg = msg.lower()
         responses = {
-            "python": "🐍 Try list comprehensions and explore Python's standard library!",
-            "ai": "🤖 AI is amazing! Learn with small datasets before deep models.",
-            "web": "🌐 Start with HTML, CSS, and JS — then move to React!",
-            "motivate": "💪 Every coder was once a beginner — keep pushing!",
+            "python": "🐍 Use list comprehensions and the standard library to speed up your workflow!",
+            "ai": "🤖 Start with basics: Python + NumPy + Pandas + scikit-learn!",
+            "web": "🌐 Learn HTML → CSS → JavaScript → React for front-end mastery.",
+            "motivate": "💪 Every coder starts small — greatness grows with persistence!"
         }
-        for key in responses:
-            if key in message:
-                return responses[key]
+        for key, val in responses.items():
+            if key in msg:
+                return val
         return np.random.choice([
-            "🚀 Keep learning, consistency beats talent!",
-            "✨ Great question — care to elaborate?",
-            "💬 I’m always here to help your study journey!"
+            "🚀 Keep going, progress compounds over time!",
+            "💬 Want a coding challenge suggestion?",
+            "✨ You're doing better than you think!"
         ])
 
     if user_input:
         st.session_state.chat_history.append(("user", user_input))
-        with st.spinner("Assistant is typing..."):
-            time.sleep(0.8)
-            bot_reply = get_bot_response(user_input)
-            st.session_state.chat_history.append(("bot", bot_reply))
+        with st.spinner("Assistant typing..."):
+            time.sleep(1)
+            reply = get_bot_response(user_input)
+            st.session_state.chat_history.append(("bot", reply))
 
-    for sender, msg in st.session_state.chat_history:
+    for sender, message in st.session_state.chat_history:
         if sender == "user":
-            st.markdown(f"<div style='background:#DCF8C6; padding:10px; border-radius:10px; margin:5px 0; text-align:right'><b>You:</b> {msg}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='chat-user'><b>You:</b> {message}</div>", unsafe_allow_html=True)
         else:
-            st.markdown(f"<div style='background:#E9E9EB; padding:10px; border-radius:10px; margin:5px 0'><b>Assistant:</b> {msg}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='chat-bot'><b>Assistant:</b> {message}</div>", unsafe_allow_html=True)
 
 # ------------------ FOOTER ------------------
 st.markdown("---")
-st.markdown("**Developed by Anish | CSE Learning Path Dashboard © 2025**")
+st.markdown("<p style='text-align:center; color:gray;'>© 2025 CSE Learning Path Dashboard | Developed by <b>Anish</b></p>", unsafe_allow_html=True)
