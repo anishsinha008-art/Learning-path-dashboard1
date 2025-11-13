@@ -1,271 +1,460 @@
-# learning_dashboard.py
-# 🚀 Enhanced Learning Path Dashboard — Cyber Blue Theme (with File Uploads per Course)
+# app.py
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
-import json
-import os
-from datetime import datetime
-from pathlib import Path
+import time
+import random
+from io import BytesIO
 
-# ------------------ CONFIG ------------------
+# ------------------ PAGE CONFIG ------------------
 st.set_page_config(page_title="CSE Learning Path Dashboard", layout="wide")
-DATA_FILE = "learning_data.json"
-UPLOADS_DIR = Path("uploads")
-UPLOADS_DIR.mkdir(exist_ok=True)
 
-# ------------------ HELPERS: load/save ------------------
-def load_data():
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    # default structure includes uploads mapping course -> list
-    return {"courses": [], "planner": [], "chat_history": [], "uploads": {}}
+# ------------------ SESSION STATE DEFAULTS ------------------
+if "chat_history" not in st.session_state:
+    # list of tuples (sender, message, iso_timestamp)
+    st.session_state.chat_history = []
+if "topic_memory" not in st.session_state:
+    st.session_state.topic_memory = None
+if "download_blob" not in st.session_state:
+    st.session_state.download_blob = None
+if "show_more_courses" not in st.session_state:
+    st.session_state.show_more_courses = False
 
-def save_data(d):
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(d, f, indent=4, ensure_ascii=False)
-
-def safe_course_folder(course_name: str) -> Path:
-    safe_name = "".join(c if c.isalnum() or c in (" ", "-", "_") else "_" for c in course_name).strip().replace(" ", "_")
-    folder = UPLOADS_DIR / safe_name
-    folder.mkdir(parents=True, exist_ok=True)
-    return folder
-
-def save_uploaded_file(course_name: str, uploaded_file) -> dict:
-    """Save uploaded file to disk and return metadata dict."""
-    folder = safe_course_folder(course_name)
-    filename = uploaded_file.name
-    # avoid accidental overwrite: append timestamp if file exists
-    target = folder / filename
-    if target.exists():
-        stem = target.stem
-        suffix = target.suffix
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        target = folder / f"{stem}_{timestamp}{suffix}"
-    # write bytes
-    with open(target, "wb") as f:
-        f.write(uploaded_file.getbuffer())
-    meta = {
-        "filename": target.name,
-        "path": str(target.as_posix()),
-        "uploaded_at": datetime.utcnow().isoformat() + "Z",
-        "size_bytes": target.stat().st_size
-    }
-    return meta
-
-# ------------------ INITIALIZE ------------------
-if "data" not in st.session_state:
-    st.session_state.data = load_data()
-if "selected_course" not in st.session_state:
-    st.session_state.selected_course = None
-
-data = st.session_state.data
-
-# ------------------ THEME CSS ------------------
+# ------------------ GLOBAL NEON THEME STYLES ------------------
 st.markdown(
     """
     <style>
-    body { background-color: #0b0f1a; color: #cfe3ff; font-family: 'Poppins', sans-serif; }
-    .stButton > button { background: linear-gradient(90deg, #00bfff, #0066ff); color: white; border-radius: 12px; border: none; font-weight: bold; transition: 0.15s; }
-    .stButton > button:hover { transform: scale(1.03); }
-    .metric-box { background: rgba(0, 102, 255, 0.08); padding: 12px; border-radius: 10px; text-align: center; }
-    .card { background: rgba(255,255,255,0.02); padding: 12px; border-radius: 10px; border: 1px solid rgba(0,102,255,0.06); }
+    /* app background */
+    .stApp {
+        background: #000000;
+        color: #bfffc2;
+    }
+
+    /* Headings */
+    h1, h2, h3 {
+        color: #bfffc2;
+    }
+
+    /* Neon buttons look */
+    .neon-btn {
+        background: linear-gradient(90deg,#00ff7f33,#00ff7f22);
+        color: #000;
+        padding: 8px 14px;
+        border-radius: 10px;
+        border: 1px solid rgba(0,255,127,0.35);
+        box-shadow: 0 0 12px rgba(0,255,127,0.10), inset 0 0 6px rgba(0,255,127,0.03);
+        font-weight: 600;
+    }
+
+    .neon-btn:hover {
+        box-shadow: 0 0 24px rgba(0,255,127,0.18), inset 0 0 8px rgba(0,255,127,0.06);
+    }
+
+    /* Dashboard card */
+    .card {
+        background: rgba(255,255,255,0.02);
+        padding: 14px;
+        border-radius: 12px;
+        border: 1px solid rgba(0,255,127,0.06);
+    }
+
+    /* Chat area wrapper */
+    .chat-area {
+        background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005));
+        border-radius: 12px;
+        padding: 14px;
+        max-height: 62vh;
+        overflow-y: auto;
+        border: 1px solid rgba(0,255,127,0.04);
+    }
+
+    /* Chat bubble styles */
+    .bubble-user {
+        background: linear-gradient(90deg,#003e13,#1b5e20);
+        color: #eafff0;
+        padding: 12px;
+        border-radius: 14px;
+        margin: 8px 0;
+        text-align: right;
+        display: inline-block;
+        max-width: 85%;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.6), 0 0 16px rgba(0,255,127,0.06);
+        animation: pulseIn 0.9s ease-out;
+    }
+
+    .bubble-bot {
+        background: linear-gradient(90deg,#134b2b,#2e7d32);
+        color: #eafff0;
+        padding: 12px;
+        border-radius: 14px;
+        margin: 8px 0;
+        text-align: left;
+        display: inline-block;
+        max-width: 85%;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.6), 0 0 12px rgba(0,255,127,0.06);
+        animation: pulseIn 0.9s ease-out;
+    }
+
+    /* Neon outline for active chat page header */
+    .neon-header {
+        color: #bfffc2;
+        text-shadow: 0 0 8px rgba(0,255,127,0.18);
+    }
+
+    @keyframes pulseGlow {
+        0% { box-shadow: 0 0 6px rgba(0,255,127,0.06); }
+        50% { box-shadow: 0 0 18px rgba(0,255,127,0.16); }
+        100% { box-shadow: 0 0 6px rgba(0,255,127,0.06); }
+    }
+
+    @keyframes pulseIn {
+        0% { transform: translateY(6px); opacity: 0; box-shadow: 0 0 4px rgba(0,255,127,0.02); }
+        60% { transform: translateY(0px); opacity: 1; }
+        100% { transform: translateY(0px); opacity: 1; }
+    }
+
+    /* small helper for memory badge */
+    .memory-badge {
+        background: rgba(0,255,127,0.08);
+        color: #bfffc2;
+        padding: 6px 10px;
+        border-radius: 10px;
+        border: 1px solid rgba(0,255,127,0.06);
+        display:inline-block;
+        margin-bottom:8px;
+    }
+
+    /* download button container */
+    .download-area {
+        margin-top: 8px;
+    }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-# ------------------ HEADER ------------------
-st.title("💻 CSE Learning Path Dashboard")
-st.subheader("🚀 Empower your learning journey — now with per-course file uploads")
+# ------------------ SIDEBAR NAVIGATION ------------------
+st.sidebar.title("☰ Menu")
+page = st.sidebar.radio("Navigate:", ["🏠 Dashboard", "🤖 Chat Assistant"])
 
-# ------------------ SIDEBAR: Add Course ------------------
-st.sidebar.header("📘 Add New Course")
-course_name = st.sidebar.text_input("Course Name")
-total_topics = st.sidebar.number_input("Total Topics", min_value=1, max_value=500, value=10)
-if st.sidebar.button("Add Course"):
-    if not course_name.strip():
-        st.sidebar.error("Please provide a course name.")
-    else:
-        new_course = {"name": course_name.strip(), "progress": 0, "topics": int(total_topics)}
-        data["courses"].append(new_course)
-        # ensure uploads mapping exists for the course
-        if course_name.strip() not in data.get("uploads", {}):
-            data.setdefault("uploads", {})[course_name.strip()] = []
-        save_data(data)
-        st.sidebar.success(f"Course '{course_name.strip()}' added!")
-        st.experimental_rerun()
+# =========================
+# PAGE: DASHBOARD
+# =========================
+if page == "🏠 Dashboard":
+    st.title("🧠 CSE Learning Path Dashboard", anchor=None)
+    st.markdown("<div class='card'>Track your progress, courses, and overall growth in Computer Science.</div>", unsafe_allow_html=True)
 
-# ------------------ COURSE SELECTION ------------------
-course_names = [c["name"] for c in data["courses"]]
-if not course_names:
-    st.warning("No courses added yet. Add a course in the sidebar to start.")
-    st.stop()
-
-selected = st.selectbox("Select a Course", course_names)
-course = next((c for c in data["courses"] if c["name"] == selected), None)
-st.markdown(f"### 📚 Course: **{course['name']}**")
-
-# ------------------ UPLOADS: File Upload Per Course ------------------
-st.subheader("📎 Course Materials — Upload & Manage Files")
-
-# file uploader (allow multiple)
-uploaded_files = st.file_uploader("Upload files for this course (PDF, PNG, PPTX, ZIP, etc.)", type=None, accept_multiple_files=True)
-
-if uploaded_files:
-    saved_meta = []
-    for f in uploaded_files:
-        try:
-            meta = save_uploaded_file(course['name'], f)
-            # record in JSON structure under course
-            data.setdefault("uploads", {})
-            data["uploads"].setdefault(course['name'], [])
-            data["uploads"][course['name']].append(meta)
-            saved_meta.append(meta)
-        except Exception as e:
-            st.error(f"Failed to save {f.name}: {e}")
-    if saved_meta:
-        save_data(data)
-        st.success(f"Saved {len(saved_meta)} file(s) to uploads for course '{course['name']}'")
-        st.experimental_rerun()
-
-# show existing uploads for this course
-course_uploads = data.get("uploads", {}).get(course['name'], [])
-if course_uploads:
-    st.markdown("**Uploaded files:**")
-    for i, meta in enumerate(course_uploads):
-        fn = meta.get("filename", "unknown")
-        uploaded_at = meta.get("uploaded_at", "")
-        size_kb = int(meta.get("size_bytes", 0) // 1024)
-        cols = st.columns([3, 1, 1])
-        cols[0].markdown(f"📄 **{fn}**  \n<small>Uploaded: {uploaded_at}</small>", unsafe_allow_html=True)
-        # Download button: read bytes and present as download
-        file_path = meta.get("path", "")
-        try:
-            if file_path and os.path.exists(file_path):
-                with open(file_path, "rb") as fh:
-                    file_bytes = fh.read()
-                cols[1].download_button(label=f"⬇️ {size_kb} KB", data=file_bytes, file_name=fn, mime="application/octet-stream")
-            else:
-                cols[1].write("⚠️ Missing")
-        except Exception as e:
-            cols[1].write("Err")
-        # delete
-        if cols[2].button("🗑️ Delete", key=f"del_upload_{course['name']}_{i}"):
-            # remove file from disk if exists
-            try:
-                if file_path and os.path.exists(file_path):
-                    os.remove(file_path)
-            except Exception:
-                pass
-            # remove metadata entry
-            data["uploads"][course['name']].pop(i)
-            save_data(data)
-            st.success(f"Deleted {fn}")
-            st.experimental_rerun()
-else:
-    st.info("No files uploaded for this course yet. Use the uploader above to add materials.")
-
-st.markdown("---")
-
-# ------------------ PROGRESS TRACKER ------------------
-st.subheader(f"📊 Progress — {course['name']}")
-progress = st.slider("Update your progress (%)", 0, 100, course.get("progress", 0), key=f"progress_{course['name']}")
-if progress != course.get("progress", 0):
-    course['progress'] = int(progress)
-    save_data(data)
-
-# Gauge chart (progress)
-fig = go.Figure(
-    go.Indicator(
+    # Overall Progress Gauge (neon colors)
+    st.subheader("🎯 Overall Progress")
+    gauge_fig = go.Figure(go.Indicator(
         mode="gauge+number",
-        value=course["progress"],
-        title={"text": "Progress", "font": {"size": 18}},
+        value=68,
+        title={'text': "Total Completion"},
         gauge={
-            "axis": {"range": [0, 100]},
-            "bar": {"color": "#00bfff"},
-            "bgcolor": "#0b0f1a",
-            "borderwidth": 2,
-            "bordercolor": "#0066ff",
-            "steps": [
-                {"range": [0, 50], "color": "#102030"},
-                {"range": [50, 100], "color": "#0b1f3a"},
-            ],
-        },
-        number={"font": {"color": "#00bfff", "size": 36}},
-    )
-)
-fig.update_layout(height=250, margin=dict(t=0, b=0, l=0, r=0))
-st.plotly_chart(fig, use_container_width=True)
+            'axis': {'range': [0, 100], 'tickcolor': '#bfffc2'},
+            'bar': {'color': "#00FF7F"},
+            'bgcolor': "rgba(0,0,0,0)",
+            'steps': [
+                {'range': [0, 50], 'color': "rgba(0,255,127,0.03)"},
+                {'range': [50, 100], 'color': "rgba(0,255,127,0.06)"}
+            ]
+        }
+    ))
+    gauge_fig.update_layout(height=300, paper_bgcolor='rgba(0,0,0,0)', font_color='#bfffc2')
+    st.plotly_chart(gauge_fig, use_container_width=True)
 
-# ------------------ METRICS ------------------
-cols = st.columns(3)
-with cols[0]:
-    st.markdown(f"<div class='metric-box'><h4>Total Topics</h4><h2>{course.get('topics', 0)}</h2></div>", unsafe_allow_html=True)
-with cols[1]:
-    completed = int(course.get('topics', 0) * course.get('progress', 0) / 100)
-    st.markdown(f"<div class='metric-box'><h4>Completed</h4><h2>{completed}</h2></div>", unsafe_allow_html=True)
-with cols[2]:
-    remaining = course.get('topics', 0) - completed
-    st.markdown(f"<div class='metric-box'><h4>Remaining</h4><h2>{remaining}</h2></div>", unsafe_allow_html=True)
+    # Course Completion Overview
+    st.subheader("📚 Course Completion Overview")
+    col1, col2, col3, col4 = st.columns([1, 1, 1, 0.7])
+    with col1:
+        st.button("🐍 Python", key="dash_py_btn")
+    with col2:
+        st.button("💻 C++", key="dash_cpp_btn")
+    with col3:
+        st.button("🌐 Web Dev", key="dash_web_btn")
+    with col4:
+        if st.button("More Courses ▼" if not st.session_state.show_more_courses else "Hide Courses ▲", key="dash_more_btn"):
+            st.session_state.show_more_courses = not st.session_state.show_more_courses
 
-st.markdown("---")
-
-# ------------------ PLANNER (compact) ------------------
-st.subheader("🗓️ Study Planner")
-task = st.text_input("Add a new task")
-if st.button("Add Task"):
-    if task.strip():
-        data.setdefault("planner", []).append({"task": task.strip(), "done": False, "created": str(datetime.now())})
-        save_data(data)
-        st.success("Task added!")
-        st.experimental_rerun()
-
-if data.get("planner"):
-    for i, t in enumerate(data["planner"]):
-        cols = st.columns([0.05, 0.75, 0.2])
-        done = cols[0].checkbox("", t["done"], key=f"task_{i}")
-        cols[1].write(f"{'✅ ' if done else '🕒 '}{t['task']}")
-        if cols[2].button("❌ Remove", key=f"remove_{i}"):
-            data["planner"].pop(i)
-            save_data(data)
-            st.experimental_rerun()
-        if done != t["done"]:
-            t["done"] = done
-            save_data(data)
-
-st.markdown("---")
-
-# ------------------ CHATBOT SIM ------------------
-st.subheader("💬 Motivator Bot")
-prompt = st.text_input("Say something to your motivator bot", key="bot_prompt")
-if st.button("Send", key="send_bot"):
-    if prompt.strip():
-        responses = [
-            "Keep going! You’re doing amazing! 🚀",
-            "Every step counts — progress is power. 💪",
-            "Don’t give up now; success is closer than you think! 🌟",
-            "Your effort defines your excellence. 🔥",
+    if st.session_state.show_more_courses:
+        st.markdown("---")
+        extra_courses = [
+            "🤖 Artificial Intelligence", "📊 Data Science", "🧩 Machine Learning",
+            "🕹️ Game Development", "📱 App Development",
+            "⚙️ DSA", "☁️ Cloud Computing", "🔒 Cybersecurity"
         ]
-        reply = np.random.choice(responses)
-        data.setdefault("chat_history", []).append({"user": prompt.strip(), "bot": reply, "time": datetime.utcnow().isoformat()})
-        save_data(data)
-        st.success("Bot replied!")
+        for i, c in enumerate(extra_courses):
+            st.button(c, key=f"extra_course_{i}")
+        st.markdown("---")
+
+    # Weekly Progress (neon bar)
+    st.subheader("📆 Weekly Progress")
+    weeks = ["Week 1", "Week 2", "Week 3", "Week 4"]
+    progress = [70, 82, 90, 100]
+    bar_fig = go.Figure(go.Bar(
+        x=weeks,
+        y=progress,
+        text=progress,
+        textposition='auto',
+        marker_color=['#00FF7F']*len(progress)
+    ))
+    bar_fig.update_layout(title="Weekly Growth Chart", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color='#bfffc2', height=380)
+    st.plotly_chart(bar_fig, use_container_width=True)
+
+    # Course table
+    st.subheader("📈 Detailed Course Progress")
+    course_data = {
+        "Course": ["Python", "C++", "Web Development", "AI", "Data Science", "Machine Learning", "Cybersecurity"],
+        "Completion %": [85, 60, 75, 40, 55, 45, 30],
+        "Status": ["Completed", "In Progress", "In Progress", "Not Started", "In Progress", "In Progress", "Not Started"]
+    }
+    df = pd.DataFrame(course_data)
+    try:
+        st.dataframe(df.style.background_gradient(cmap="Greens"), use_container_width=True)
+    except Exception:
+        st.dataframe(df, use_container_width=True)
+
+    st.markdown("---")
+    st.markdown("<div style='color:#bfffc2;'>Developed by Anish | CSE Learning Path Dashboard © 2025</div>", unsafe_allow_html=True)
+
+# =========================
+# PAGE: CHAT ASSISTANT
+# =========================
+elif page == "🤖 Chat Assistant":
+    st.markdown("<h2 class='neon-header'>🤖 Neon Chat Assistant</h2>", unsafe_allow_html=True)
+    st.markdown("<div style='color:#bfffc2;'>Futuristic black + neon green. Topic memory ON. Type 'bye' to reset topic memory.</div>", unsafe_allow_html=True)
+    st.markdown("")
+
+    # Quick starters
+    c1, c2, c3, c4 = st.columns(4)
+    if c1.button("💪 Motivate Me", key="starter_motivate"):
+        st.session_state.chat_history.append(("user", "motivate me", pd.Timestamp.utcnow().isoformat()))
+        st.session_state.chat_history.append(("bot", "🔥 Keep pushing — small steps every day!", pd.Timestamp.utcnow().isoformat()))
+    if c2.button("🐍 Python Tip", key="starter_python"):
+        st.session_state.chat_history.append(("user", "tell me about python", pd.Timestamp.utcnow().isoformat()))
+        st.session_state.chat_history.append(("bot", "🐍 Use list comprehensions for concise, fast loops.", pd.Timestamp.utcnow().isoformat()))
+        st.session_state.topic_memory = "python"
+    if c3.button("🧠 AI Info", key="starter_ai"):
+        st.session_state.chat_history.append(("user", "tell me about ai", pd.Timestamp.utcnow().isoformat()))
+        st.session_state.chat_history.append(("bot", "🤖 Start with NumPy & Pandas — clean data first.", pd.Timestamp.utcnow().isoformat()))
+        st.session_state.topic_memory = "ai"
+    if c4.button("🌐 Web Help", key="starter_web"):
+        st.session_state.chat_history.append(("user", "help with web dev", pd.Timestamp.utcnow().isoformat()))
+        st.session_state.chat_history.append(("bot", "🌐 Learn Flexbox & Grid to build responsive layouts.", pd.Timestamp.utcnow().isoformat()))
+        st.session_state.topic_memory = "web"
+
+    st.markdown("")  # spacing
+
+    # Clear chat history
+    if st.button("🧹 Clear Chat History", key="clear_chat"):
+        st.session_state.chat_history = []
+        st.session_state.topic_memory = None
+        st.session_state.download_blob = None
+        st.success("Chat cleared.")
+
+    # Chat display area
+    st.markdown("<div class='chat-area'>", unsafe_allow_html=True)
+    if st.session_state.topic_memory:
+        st.markdown(f"<div class='memory-badge'>🧠 Current Topic: {st.session_state.topic_memory.title()}</div>", unsafe_allow_html=True)
+
+    # Render chat messages
+    for sender, message, ts in st.session_state.chat_history:
+        # Show timestamp on small faint text
+        try:
+            time_str = pd.Timestamp(ts).strftime("%Y-%m-%d %H:%M:%S UTC")
+        except Exception:
+            time_str = ts
+        if sender == "user":
+            st.markdown(f"""
+                <div style='text-align:right'>
+                    <div class='bubble-user'><b>You:</b> {st.to_html(message) if hasattr(st,'to_html') else message}</div>
+                    <div style='font-size:10px;color:#8fffbf;margin-top:4px'>{time_str}</div>
+                </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+                <div style='text-align:left'>
+                    <div class='bubble-bot'><b>Assistant:</b> {st.to_html(message) if hasattr(st,'to_html') else message}</div>
+                    <div style='font-size:10px;color:#8fffbf;margin-top:4px'>{time_str}</div>
+                </div>
+            """, unsafe_allow_html=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # Input area (text_input + Send button)
+    user_text = st.text_input("Type your message here...", key="user_input_text")
+    send_clicked = st.button("Send", key="send_btn")
+
+    # -------- Enhanced Reply Generator (with fun facts & challenges) --------
+    def generate_bot_reply(user_msg: str) -> str:
+        """Enhanced conversational reply generator with topic memory and more variety."""
+        msg = user_msg.lower().strip()
+
+        # --- Response Pools ---
+        motivational = [
+            "⚡ Keep coding — greatness compiles over time!",
+            "🚀 Every bug you fix powers your journey.",
+            "🔥 Small steps daily = big wins over time.",
+            "🌟 Even a single line of code can change the world.",
+            "💪 Remember: progress, not perfection.",
+            "✨ Don’t stop when you’re tired; stop when you’re proud!"
+        ]
+
+        python_pool = [
+            "🐍 Python tip: use list comprehensions for concise loops.",
+            "💡 Use `enumerate()` and `zip()` to simplify loops elegantly.",
+            "⚙️ Try generators for memory-efficient sequences.",
+            "📘 Learn how `*args` and `**kwargs` make functions flexible!",
+            "🧩 Did you know? `f-strings` are faster than `format()`!",
+            "🐢 Start small — build a to-do app or a calculator project!"
+        ]
+
+        ai_pool = [
+            "🤖 Start with NumPy & Pandas to prep your data.",
+            "🧠 Learn the math behind ML — linear algebra & stats are key.",
+            "📊 Try a fun project: classify movie reviews by sentiment!",
+            "🦾 Train your first model with Scikit-learn — easy and powerful.",
+            "💭 Ever explored how neural networks mimic human learning?",
+            "🧬 AI isn’t magic — it’s just math, data, and persistence!"
+        ]
+
+        web_pool = [
+            "🌐 Build a personal portfolio — HTML + CSS + JS to start.",
+            "💫 Learn CSS Grid / Flexbox for responsive layouts.",
+            "⚡ Try JavaScript DOM events — make your site interactive!",
+            "🧩 Ever heard of REST APIs? They’re the bridge between web apps.",
+            "🪄 Use animations and transitions to bring life to your UI.",
+            "🌈 Start small — a landing page is a perfect first project!"
+        ]
+
+        jokes = [
+            "😂 Why do programmers prefer dark mode? Because light attracts bugs!",
+            "🤣 Debugging: where you are both the detective and the culprit.",
+            "😆 A SQL query walks into a bar, asks two tables: 'Can I join you?'",
+            "🧠 Programmer’s diet: coffee, pizza, and more coffee!",
+            "💻 I would tell you a UDP joke… but you might not get it."
+        ]
+
+        # Fun facts and coding challenges
+        fun_facts = [
+            "💡 Fun fact: The first computer bug was a real moth found in a Harvard computer in 1947!",
+            "🤯 Did you know? Python was named after 'Monty Python', not the snake!",
+            "📡 The first website ever made is still online — created by Tim Berners-Lee in 1991!",
+            "🧬 The Apollo 11 guidance computer had far less memory than a modern phone.",
+            "💾 The floppy disk icon 💾 still represents 'save', even though most people have never used one."
+        ]
+
+        coding_challenges = [
+            "🧩 Challenge: Write a Python function that reverses a string without using [::-1].",
+            "⚙️ Task: Create a calculator that can perform +, -, ×, ÷ operations from user input.",
+            "🚀 Try making a to-do list app with Streamlit!",
+            "💻 Write a program that counts how many vowels are in a sentence.",
+            "🔢 Challenge: Generate Fibonacci numbers using recursion.",
+            "🧠 Bonus: Build a simple chatbot that replies to greetings!"
+        ]
+
+        greetings = [
+            "👋 Hey there! How’s your learning journey going?",
+            "✨ Hi! Ready to dive into something new today?",
+            "🌟 Hello! What are we working on today?",
+            "👽 Welcome back, code explorer!",
+            "😄 Hey! Let’s make something awesome today."
+        ]
+
+        random_comments = [
+            "💬 That’s interesting! Tell me more.",
+            "🤔 Hmm, sounds like you’re thinking deeply — I like that.",
+            "😄 Cool! You’ve got a curious mind.",
+            "🧠 I love that question — reminds me of creative thinkers!",
+            "💡 Every chat adds a spark of knowledge!"
+        ]
+
+        # --- Keyword Detection ---
+        if any(k in msg for k in ["hello", "hi", "hey", "hola", "yo"]):
+            st.session_state.topic_memory = "greetings"
+            return random.choice(greetings)
+        if any(k in msg for k in ["python", "py"]):
+            st.session_state.topic_memory = "python"
+            return random.choice(python_pool)
+        if any(k in msg for k in ["ai", "machine learning", "ml"]):
+            st.session_state.topic_memory = "ai"
+            return random.choice(ai_pool)
+        if any(k in msg for k in ["web", "html", "css", "javascript", "js"]):
+            st.session_state.topic_memory = "web"
+            return random.choice(web_pool)
+        if any(k in msg for k in ["motivate", "inspire", "tired", "sad"]):
+            st.session_state.topic_memory = "motivation"
+            return random.choice(motivational)
+        if any(k in msg for k in ["joke", "funny", "laugh"]):
+            st.session_state.topic_memory = "jokes"
+            return random.choice(jokes)
+        if any(k in msg for k in ["fact", "fun fact"]):
+            st.session_state.topic_memory = "facts"
+            return random.choice(fun_facts)
+        if any(k in msg for k in ["challenge", "task", "problem"]):
+            st.session_state.topic_memory = "challenges"
+            return random.choice(coding_challenges)
+        if any(k in msg for k in ["bye", "goodnight", "see you", "exit"]):
+            st.session_state.topic_memory = None
+            return "👋 Bye! Topic memory cleared — take care and keep learning!"
+
+        # fallback: continue with topic memory if present
+        topic = st.session_state.topic_memory
+        if topic == "python":
+            return random.choice(python_pool)
+        if topic == "ai":
+            return random.choice(ai_pool)
+        if topic == "web":
+            return random.choice(web_pool)
+        if topic == "motivation":
+            return random.choice(motivational)
+        if topic == "jokes":
+            return random.choice(jokes)
+        if topic == "facts":
+            return random.choice(fun_facts)
+        if topic == "challenges":
+            return random.choice(coding_challenges)
+        if topic == "greetings":
+            return random.choice(random_comments)
+
+        # general fallback responses
+        return random.choice([
+            "✨ Tell me what you'd like to learn: Python, AI, or Web?",
+            "🚀 Want a quick coding challenge?",
+            "💬 I can give tips, a study plan, or a small project idea — what do you prefer?",
+            "🔎 Ask me for a fun fact or a coding challenge anytime!",
+            "🌱 Learning never stops — what’s your focus this week?"
+        ])
+
+    # When Send is clicked: append and rerun (clears input safely)
+    if send_clicked and user_text and user_text.strip():
+        # append user's message + timestamp
+        st.session_state.chat_history.append(("user", user_text.strip(), pd.Timestamp.utcnow().isoformat()))
+        # generate reply
+        with st.spinner("Assistant is typing..."):
+            time.sleep(np.random.uniform(0.45, 0.95))
+            reply = generate_bot_reply(user_text.strip())
+            st.session_state.chat_history.append(("bot", reply, pd.Timestamp.utcnow().isoformat()))
+        # force rerun so the text_input is cleared visually and UI updates
         st.experimental_rerun()
 
-if data.get("chat_history"):
-    for chat in reversed(data["chat_history"][-6:]):
-        st.markdown(f"**You:** {chat.get('user','')}  \n**Bot:** {chat.get('bot','')}  \n<small>{chat.get('time','')}</small>", unsafe_allow_html=True)
+    # Save Chat History (manual): prepare CSV blob when button clicked
+    st.markdown("---")
+    if st.button("💾 Save Chat History", key="save_chat_btn"):
+        if st.session_state.chat_history:
+            chat_df = pd.DataFrame(st.session_state.chat_history, columns=["Sender", "Message", "Timestamp"])
+            csv_bytes = chat_df.to_csv(index=False).encode("utf-8")
+            st.session_state.download_blob = csv_bytes
+            st.success("Chat prepared — click the download button below.")
+        else:
+            st.info("No chat to save yet. Start a conversation first.")
 
-# ------------------ FOOTER ------------------
-st.markdown(
-    """
-    <hr>
-    <center>
-    <p style='color:#4fc3f7;'>Made with 💙 by your AI Learning Assistant — Files saved locally in /uploads</p>
-    </center>
-    """,
-    unsafe_allow_html=True,
-)
+    # Show download button only when blob ready
+    if st.session_state.download_blob:
+        st.markdown("<div class='download-area'>", unsafe_allow_html=True)
+        st.download_button(label="⬇️ Download Chat as CSV", data=st.session_state.download_blob, file_name="chat_history.csv", mime="text/csv", use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown("")
+    st.markdown("<div style='color:#bfffc2;text-align:center'>Neon Chat • Developed by Anish © 2025</div>", unsafe_allow_html=True)
