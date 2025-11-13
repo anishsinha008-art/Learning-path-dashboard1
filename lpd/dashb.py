@@ -1,3 +1,4 @@
+# CSE Learning Path Dashboard
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -10,49 +11,24 @@ st.set_page_config(page_title="CSE Learning Path Dashboard", layout="wide")
 # ------------------ DARK THEME CSS ------------------
 st.markdown("""
     <style>
-        body {
-            background-color: #0E1117;
-            color: #FFFFFF;
-        }
-        [data-testid="stAppViewContainer"] {
-            background-color: #0E1117;
-            color: #FFFFFF;
-        }
-        [data-testid="stSidebar"] {
-            background-color: #111827;
-        }
+        body { background-color: #0E1117; color: #FFFFFF; }
+        [data-testid="stAppViewContainer"] { background-color: #0E1117; color: #FFFFFF; }
+        [data-testid="stSidebar"] { background-color: #111827; }
         .stButton>button {
-            background-color: #1E3A8A;
-            color: white;
-            border-radius: 10px;
-            border: none;
-            transition: 0.3s;
+            background-color: #1E3A8A; color: white; border-radius: 10px; border: none; transition: 0.3s;
         }
-        .stButton>button:hover {
-            background-color: #2563EB;
-        }
+        .stButton>button:hover { background-color: #2563EB; }
         .metric-box {
-            background-color: #1E293B;
-            border-radius: 10px;
-            padding: 15px;
-            text-align: center;
+            background-color: #1E293B; border-radius: 10px; padding: 15px; text-align: center;
             box-shadow: 0px 0px 10px #00BFFF33;
         }
         .chat-user {
-            background-color: #2563EB;
-            color: white;
-            padding: 10px;
-            border-radius: 10px;
-            text-align: right;
-            margin-bottom: 5px;
+            background-color: #2563EB; color: white; padding: 10px; border-radius: 10px;
+            text-align: right; margin-bottom: 5px;
         }
         .chat-bot {
-            background-color: #1E293B;
-            color: #E2E8F0;
-            padding: 10px;
-            border-radius: 10px;
-            text-align: left;
-            margin-bottom: 5px;
+            background-color: #1E293B; color: #E2E8F0; padding: 10px; border-radius: 10px;
+            text-align: left; margin-bottom: 5px;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -70,12 +46,9 @@ if "course_data" not in st.session_state:
 if "weekly_hours" not in st.session_state:
     st.session_state.weekly_hours = {"Week 1": 0, "Week 2": 0, "Week 3": 0, "Week 4": 0}
 
-# ------------------ SIDEBAR NAVIGATION ------------------
+# ------------------ SIDEBAR ------------------
 st.sidebar.title("🧭 Navigation")
-page = st.sidebar.radio(
-    "Choose a section:",
-    ["🏠 Home", "📚 Courses", "📆 Weekly Progress", "📈 Insights", "🤖 AI Assistant"]
-)
+page = st.sidebar.radio("Choose a section:", ["🏠 Home", "📚 Courses", "📆 Weekly Progress", "📈 Insights", "🤖 AI Assistant"])
 st.session_state.page = page
 
 theme = st.sidebar.selectbox("Theme", ["🌙 Dark", "☀️ Light"])
@@ -123,6 +96,8 @@ elif st.session_state.page == "📚 Courses":
         new_val = st.slider(f"{row['Course']} Progress", 0, 100, int(row["Completion %"]))
         st.session_state.course_data.at[i, "Completion %"] = new_val
         st.progress(new_val)
+
+    st.download_button("📥 Export Progress (CSV)", st.session_state.course_data.to_csv(index=False).encode("utf-8"), "progress.csv", "text/csv")
 
 # ------------------ WEEKLY PROGRESS PAGE ------------------
 elif st.session_state.page == "📆 Weekly Progress":
@@ -203,5 +178,4 @@ elif st.session_state.page == "🤖 AI Assistant":
         msg = msg.lower()
         if "challenge" in msg:
             return "🧩 Try building a simple calculator in Python using functions and loops!"
-        elif "career" in msg:
-            return "🎓 Explore roles like Data Analyst, ML Engineer, or Full Stack Developer
+        elif "career
