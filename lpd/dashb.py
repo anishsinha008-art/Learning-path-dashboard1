@@ -29,7 +29,7 @@ import subprocess
 import shlex
 
 # ------------------ PAGE CONFIG ------------------
-st.set_page_config(page_title="CSE Learning Path — AI Mentor (Ultimate)", layout="wide")
+st.set_page_config(page_title="Learning Path Dashboard", layout="wide")
 
 # ------------------ Persistence ------------------
 PERSIST_FILE = "cse_dashboard_state.json"
