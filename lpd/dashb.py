@@ -617,4 +617,4 @@ elif page == "🌌 Spectorial":
             st.write(e['entry']); st.markdown("---")
 
 # ------------------ Footer ------------------
-st.markdown("<div style='text-align:center; color:#bfffc2; margin-top:18px'>Moscifer • CSE Mentor — Built 2025</div>", unsafe_allow_html=True)
+st.markdown("<div style='text-align:center; color:#bfffc2; margin-top:18px'> Learning Path •  Dashboard — Built 2025</div>", unsafe_allow_html=True)
