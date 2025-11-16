@@ -373,7 +373,7 @@ with st.sidebar:
 # ------------------ Dashboard Page ------------------
 if page == "🏠 Dashboard":
     st.title("📚Learning Path")
-    st.markdown("<div class='card'>Fusion of learning, AI mentor, and creative Spectorial mode. Track progress, ask the AI, take quizzes, run code (if enabled).</div>", unsafe_allow_html=True)
+    st.markdown("<div class='card'>Fusion of learning, AI mentor, and creative Spectorial mode. Track progress, ask the AI, take quizzes, run code .</div>", unsafe_allow_html=True)
 
     # top metrics
     c1,c2,c3 = st.columns([1.2,1,1])
