@@ -337,7 +337,7 @@ else:
 
 # ------------------ Sidebar ------------------
 with st.sidebar:
-    st.title("☰ Moscifer Hub")
+    st.title("☰ Menu")
     page = st.radio("Navigate:", ["🏠 Dashboard", "🤖 AI Mentor", "📝 Notes", "🧪 Quizzes", "🧪 Code Runner", "🌌 Spectorial"])
     st.markdown("---")
     st.selectbox("Theme:", ["neon", "dark"], index=0 if st.session_state.theme=="neon" else 1, key="theme_select", on_change=lambda: st.session_state.update({"theme":st.session_state.theme_select}))
