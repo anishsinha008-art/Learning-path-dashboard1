@@ -1,49 +1,43 @@
-# app_superior.py
+# app_superior_custom.py
 """
-CSE Learning Path — AI Mentor (Ultimate)
-Features:
-- UI: Neon/dark themes, course management, charts
-- AI: DeepSeek/OpenAI scaffold + offline simulator + modes
-- TTS via gTTS
-- Notes, quizzes, code runner (toggle), Spectorial Mode
-- Persistence (local JSON), secrets/env support for API keys
-
-Setup:
-pip install streamlit pandas plotly numpy requests gTTS
-(install openai package if you want OpenAI integration)
-Use .streamlit/secrets.toml or environment variables for keys:
-DEEPSEEK_API_KEY, OPENAI_API_KEY
+CSE Learning Path — AI Mentor (Custom Neon UI)
+Save as: app_superior_custom.py
+Run: streamlit run app_superior_custom.py
 """
 
 import os
+import sys
+import json
+import time
+import random
+import subprocess
+from io import BytesIO
+
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
 import numpy as np
-import time
-import json
-import random
+import plotly.graph_objects as go
 import requests
-from io import BytesIO
-import subprocess
-import shlex
 
 # ------------------ PAGE CONFIG ------------------
-st.set_page_config(page_title="Learning Path Dashboard", layout="wide")
+st.set_page_config(page_title="CSE Learning Path Dashboard — AI Mentor (Pro)", layout="wide", initial_sidebar_state="expanded")
 
 # ------------------ Persistence ------------------
 PERSIST_FILE = "cse_dashboard_state.json"
 
 def save_state_local():
-    state = {
-        "chat_history": st.session_state.chat_history,
-        "topic_memory": st.session_state.topic_memory,
-        "chat_summary": st.session_state.chat_summary,
-        "courses": st.session_state.courses.to_dict(orient="records") if st.session_state.courses is not None else None,
-        "notes": st.session_state.notes,
-        "quiz_scores": st.session_state.quiz_scores,
-    }
     try:
+        state = {
+            "chat_history": st.session_state.chat_history,
+            "topic_memory": st.session_state.topic_memory,
+            "chat_summary": st.session_state.chat_summary,
+            "courses": st.session_state.courses.to_dict(orient="records") if st.session_state.courses is not None else None,
+            "notes": st.session_state.notes,
+            "quiz_scores": st.session_state.quiz_scores,
+            "spectorial_entries": st.session_state.spectorial_entries,
+            "theme": st.session_state.theme,
+            "assistant_mode": st.session_state.assistant_mode,
+        }
         with open(PERSIST_FILE, "w", encoding="utf-8") as f:
             json.dump(state, f, indent=2)
         return True
@@ -62,6 +56,9 @@ def load_state_local():
         st.session_state.chat_summary = state.get("chat_summary")
         st.session_state.notes = state.get("notes", [])
         st.session_state.quiz_scores = state.get("quiz_scores", {})
+        st.session_state.spectorial_entries = state.get("spectorial_entries", [])
+        st.session_state.theme = state.get("theme", st.session_state.theme)
+        st.session_state.assistant_mode = state.get("assistant_mode", st.session_state.assistant_mode)
         return True
     except FileNotFoundError:
         return False
@@ -89,6 +86,7 @@ def init_session_state():
         "notes": [],
         "quiz_scores": {},
         "spectorial_entries": [],
+        "show_add_course": False,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -96,12 +94,12 @@ def init_session_state():
 
 def make_course_df():
     base = [
-        {"Course": "Python", "Completion": 85, "Status": "In Progress"},
-        {"Course": "C++", "Completion": 60, "Status": "In Progress"},
-        {"Course": "Web Development", "Completion": 75, "Status": "In Progress"},
-        {"Course": "AI", "Completion": 40, "Status": "Not Started"},
-        {"Course": "Data Science", "Completion": 55, "Status": "In Progress"},
-        {"Course": "Machine Learning", "Completion": 45, "Status": "In Progress"},
+        {"Course": "Python", "Completion": 78, "Status": "In Progress"},
+        {"Course": "C++", "Completion": 66, "Status": "In Progress"},
+        {"Course": "Web Development", "Completion": 37, "Status": "In Progress"},
+        {"Course": "AI", "Completion": 54, "Status": "In Progress"},
+        {"Course": "Data Science", "Completion": 45, "Status": "In Progress"},
+        {"Course": "Machine Learning", "Completion": 40, "Status": "In Progress"},
         {"Course": "Cybersecurity", "Completion": 30, "Status": "Not Started"},
     ]
     return pd.DataFrame(base)
@@ -110,18 +108,20 @@ def now_iso():
     return pd.Timestamp.utcnow().isoformat()
 
 init_session_state()
+# default courses if none
 if st.session_state.courses is None:
     st.session_state.courses = make_course_df()
+# attempt to load persisted state (do not override defaults if missing fields)
 load_state_local()
 
-# ------------------ TTS ------------------
+# ------------------ Optional TTS ------------------
 try:
     from gtts import gTTS
     TTS_AVAILABLE = True
 except Exception:
     TTS_AVAILABLE = False
 
-def tts_speak(text: str):
+def tts_speak_bytes(text: str):
     if not TTS_AVAILABLE:
         return None
     try:
@@ -134,7 +134,7 @@ def tts_speak(text: str):
         st.warning(f"TTS failed: {e}")
         return None
 
-# ------------------ Summarizer & Simulated LLM ------------------
+# ------------------ LLM simulation / summarizer ------------------
 def summarize_memory(max_chars=800):
     msgs = st.session_state.chat_history
     if not msgs:
@@ -152,19 +152,6 @@ def summarize_memory(max_chars=800):
         summary += " | Recent: " + " | ".join(user_texts[-3:])
     return summary[:max_chars]
 
-def build_system_prompt(mode, course_ctx, chat_summary):
-    base = {
-        "Tutor": "You are a helpful computer science tutor. Give concise steps and small exercises.",
-        "Code Helper": "You are a pragmatic code assistant. Provide runnable examples and debugging tips.",
-        "Motivator": "You are a short, encouraging mentor. Provide micro-action prompts.",
-    }.get(mode, "You are a helpful assistant.")
-    ctx = ""
-    if course_ctx:
-        ctx += f" Learner context: {course_ctx}."
-    if chat_summary and st.session_state.use_memory:
-        ctx += f" Memory: {chat_summary}."
-    return base + ctx
-
 def simulated_llm_reply(user_msg, mode):
     df = st.session_state.courses
     try:
@@ -172,136 +159,42 @@ def simulated_llm_reply(user_msg, mode):
         top_hint = f"{top['Course']} ({top['Completion']}%)"
     except Exception:
         top_hint = "none"
-    summary = st.session_state.chat_summary or summarize_memory()
     msg = user_msg.lower()
-    # Code helper
     if mode == "Code Helper":
         if any(kw in msg for kw in ["bug","error","traceback","fix"]):
-            return "Please paste the minimal error or code snippet. I can propose a fix and a runnable example."
+            return "Paste the minimal error or code snippet. I'll propose a fix and runnable example."
         if "streamlit" in msg:
-            return "Tip: use st.form to group inputs and st.session_state to persist values. Want a small snippet?"
-        return "Describe the issue or desired feature and I'll return a short runnable example."
-    # Tutor
+            return "Tip: use st.form to group inputs and st.session_state to persist values. Need snippet?"
+        return "Describe the issue and I'll return a short runnable example."
     if mode == "Tutor":
         for c in st.session_state.courses['Course'].tolist():
             if c.lower() in msg:
                 comp = int(st.session_state.courses.loc[st.session_state.courses['Course']==c, 'Completion'].values[0])
                 if comp < 50:
-                    return f"You're {comp}% through {c}. Suggestion: 2 sessions of focused review (25min) + 3 practice problems. Want 2 problems now?"
+                    return f"You're {comp}% through {c}. Suggestion: 2 focused Pomodoros (25m) + 3 practice problems."
                 else:
-                    return f"At {comp}% in {c}, try a mini-project (1–2 hours). Want a project idea?"
+                    return f"At {comp}% in {c}, try a mini-project (1–2 hours). Want ideas?"
         if "exercise" in msg or "problem" in msg:
-            return "Mini exercise: write a function that reverses words in a sentence while preserving whitespace. Want solution in Python?"
-        return "Short plan: (1) 25m review (2) 45m practice (3) 10m reflect. Want me to make a 7-day plan?"
-    # Motivator
+            return "Mini exercise: write a function that reverses the words in a sentence but preserves whitespace. Want the solution in Python?"
+        return "Plan: (1) 25m review (2) 45m practice (3) 10m reflect. Want a 7-day plan?"
     if mode == "Motivator":
         choices = [
             "Small wins matter — start with a 25-min pomodoro and log one takeaway.",
             "Consistency > intensity. Pick a micro-goal and do it today.",
-            "Stuck? Take a 5-min break, then try again with the rubber-duck technique."
+            "Stuck? Take a 5-min break, then use rubber-duck debugging."
         ]
         return random.choice(choices)
     return "How can I help — study plan, code snippet, or motivation?"
 
-# ------------------ External API scaffolds ------------------
-def call_openai_chat(api_key, system_prompt, user_prompt):
-    try:
-        import openai
-        openai.api_key = api_key
-        resp = openai.ChatCompletion.create(
-            model="gpt-4o-mini" if False else "gpt-4o-mini",
-            messages=[{"role":"system","content":system_prompt},{"role":"user","content":user_prompt}],
-            max_tokens=450, temperature=0.5
-        )
-        return resp['choices'][0]['message']['content'].strip()
-    except Exception as e:
-        st.warning(f"OpenAI call failed or openai lib missing: {e}")
-        return None
-
-def call_deepseek(api_key, user_prompt):
-    # key can be None -> we will use secrets/env before calling
-    key = api_key or None
-    if not key:
-        try:
-            key = st.secrets.get("DEEPSEEK_API_KEY")
-        except Exception:
-            key = os.getenv("DEEPSEEK_API_KEY")
-    if not key:
-        st.warning("DeepSeek API key not found. Add it to .streamlit/secrets.toml or set DEEPSEEK_API_KEY env var.")
-        return None
-    try:
-        endpoint = "https://api.deepseek.com/v1/chat/completions"
-        headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
-        payload = {
-            "model":"deepseek-reasoner",
-            "messages":[{"role":"system","content":"You are a helpful AI mentor for CSE students."},
-                        {"role":"user","content":user_prompt}],
-            "temperature":0.7,"max_tokens":400
-        }
-        r = requests.post(endpoint, headers=headers, json=payload, timeout=20)
-        r.raise_for_status()
-        data = r.json()
-        # handle common shapes
-        if isinstance(data, dict):
-            choices = data.get("choices")
-            if choices and isinstance(choices, list) and len(choices)>0:
-                first = choices[0]
-                # try message.content
-                if isinstance(first.get("message"), dict):
-                    return first.get("message").get("content")
-                if first.get("text"):
-                    return first.get("text")
-            if data.get("text"):
-                return data.get("text")
-            if data.get("output"):
-                return data.get("output")
-        st.warning("DeepSeek returned unexpected shape.")
-        return None
-    except requests.exceptions.RequestException as e:
-        st.warning(f"DeepSeek request failed: {e}")
-        return None
-    except Exception as e:
-        st.warning(f"DeepSeek call failed: {e}")
-        return None
-
-# ------------------ Main generator ------------------
-def generate_bot_reply(user_msg: str, mode: str = None) -> str:
-    if mode is None:
-        mode = st.session_state.assistant_mode
-    st.session_state.typing = True
-    time.sleep(np.random.uniform(0.2, 0.9))
-    st.session_state.typing = False
-    if st.session_state.use_memory:
-        st.session_state.chat_summary = summarize_memory()
-    provider = st.session_state.api_provider
-    # OpenAI
-    if provider == "OpenAI":
-        key = st.session_state.api_key or (st.secrets.get("OPENAI_API_KEY") if "OPENAI_API_KEY" in st.secrets else os.getenv("OPENAI_API_KEY"))
-        if key:
-            sys = build_system_prompt(mode, course_ctx="", chat_summary=st.session_state.chat_summary)
-            txt = call_openai_chat(key, sys, user_msg)
-            if txt:
-                return txt
-    # DeepSeek
-    if provider == "DeepSeek":
-        key = st.session_state.deepseek_key or None
-        txt = call_deepseek(key, user_msg)
-        if txt:
-            return txt
-    # fallback
-    return simulated_llm_reply(user_msg, mode)
-
-# ------------------ Code runner (safe-ish) ------------------
+# ------------------ Safe-ish code runner fix ------------------
 def run_code_snippet(code: str, timeout=5):
     """
     Run python code in a subprocess for safety. Returns (stdout, stderr, timed_out_flag).
-    ⚠️ WARNING: this executes code on the host machine. Only enable in trusted environments.
+    WARNING: executing arbitrary code runs on the host machine. Use only in trusted env.
     """
-    # create a temporary file and run it with python -c
     try:
-        # Using subprocess with shell disabled and timeout
         proc = subprocess.run(
-            [shlex.split("python -c")[0], "-c", code],
+            [sys.executable, "-c", code],
             capture_output=True,
             text=True,
             timeout=timeout
@@ -312,53 +205,79 @@ def run_code_snippet(code: str, timeout=5):
     except Exception as e:
         return "", f"Execution failed: {e}", False
 
-# ------------------ UI Styles ------------------
+# ------------------ Styling (neon + glass) ------------------
 NEON_CSS = """
 <style>
-.stApp { background: #000; color: #bfffc2; }
-.card { background: rgba(255,255,255,0.02); padding: 12px; border-radius: 12px; border: 1px solid rgba(0,255,127,0.06); }
-.chat-area { background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005)); border-radius: 12px; padding: 12px; max-height:56vh; overflow-y:auto; border:1px solid rgba(0,255,127,0.03); }
-.bubble-user { background: linear-gradient(90deg,#003e13,#1b5e20); color:#eafff0; padding:10px; border-radius:12px; margin:8px 0; text-align:right; display:inline-block; max-width:82%; }
-.bubble-bot { background: linear-gradient(90deg,#134b2b,#2e7d32); color:#eafff0; padding:10px; border-radius:12px; margin:8px 0; text-align:left; display:inline-block; max-width:82%; }
-.memory-badge { background: rgba(0,255,127,0.08); color:#bfffc2; padding:7px 10px; border-radius:10px; display:inline-block; margin-bottom:8px; }
-.small-muted { font-size:12px; color:#8fffbf; }
+/* base */
+html, body, .main, .block-container { background: linear-gradient(180deg,#050505 0%, #040406 60%) !important; color: #c8ffdd; }
+/* sidebar */
+[data-testid="stSidebar"] > div:first-child { background: linear-gradient(180deg,#15161a,#101217); border-right: 1px solid rgba(255,255,255,0.03); padding: 18px 14px; }
+/* card */
+.card {
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  border-radius: 12px;
+  padding: 14px;
+  border: 1px solid rgba(0,255,127,0.04);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.6);
+}
+/* sub-cards inside lists */
+.small-card {
+  background: rgba(255,255,255,0.01);
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 8px;
+  border: 1px solid rgba(255,255,255,0.02);
+}
+/* chat bubbles */
+.bubble-user { background: linear-gradient(90deg,#003e13,#1b5e20); color:#eafff0; padding:10px; border-radius:12px; margin:8px 0; display:inline-block; max-width:86%; }
+.bubble-bot  { background: linear-gradient(90deg,#134b2b,#2e7d32); color:#eafff0; padding:10px; border-radius:12px; margin:8px 0; display:inline-block; max-width:86%; }
+/* memory badge */
+.memory-badge { background: rgba(0,255,127,0.06); color:#bfffc2; padding:7px 10px; border-radius:10px; display:inline-block; margin-bottom:8px; font-weight:600; }
+/* small muted */
+.small-muted { font-size:12px; color:#7fe9b5; opacity:0.9; }
+/* neon header */
+.neon-header { color: #bfffc2; font-weight:700; font-size:22px; margin-bottom:6px; }
+/* floating manage button */
+.manage-floating {
+  position: fixed;
+  right: 28px;
+  bottom: 28px;
+  z-index: 9999;
+  background: linear-gradient(90deg,#8b5cf6,#ec4899);
+  color: white;
+  padding: 12px 16px;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(140,52,255,0.16);
+  border: none;
+}
 </style>
 """
-DARK_CSS = """
-<style>
-.stApp { background: #0b0b0b; color: #e6eef1; }
-.card { background: rgba(255,255,255,0.02); padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,0.03); }
-</style>
-"""
-if st.session_state.theme == "neon":
-    st.markdown(NEON_CSS, unsafe_allow_html=True)
-else:
-    st.markdown(DARK_CSS, unsafe_allow_html=True)
+
+# apply NEON_CSS
+st.markdown(NEON_CSS, unsafe_allow_html=True)
 
 # ------------------ Sidebar ------------------
 with st.sidebar:
-    st.title("☰ Menu")
-    page = st.radio("Navigate:", ["🏠 Dashboard", "🤖 AI Mentor", "📝 Notes", "🧪 Quizzes", "🧪 Code Runner", "🌌 Spectorial"])
+    st.markdown("## ☰ Menu", unsafe_allow_html=True)
+    page = st.radio("", ["🏠 Dashboard", "🤖 AI Mentor", "📝 Notes", "🧪 Quizzes", "🧪 Code Runner", "🌌 Spectorial"], index=0)
     st.markdown("---")
-    st.selectbox("Theme:", ["neon", "dark"], index=0 if st.session_state.theme=="neon" else 1, key="theme_select", on_change=lambda: st.session_state.update({"theme":st.session_state.theme_select}))
-    st.markdown("---")
-    st.header("AI Settings")
-    st.session_state.assistant_mode = st.selectbox("Mode:", ["Tutor","Code Helper","Motivator"], index=["Tutor","Code Helper","Motivator"].index(st.session_state.assistant_mode) if st.session_state.assistant_mode in ["Tutor","Code Helper","Motivator"] else 0)
+    st.selectbox("Theme", ["neon"], index=0, help="Theme is currently neon (custom).")
+    st.markdown("### Assistant Settings")
+    st.session_state.assistant_mode = st.selectbox("Mode", ["Tutor", "Code Helper", "Motivator"], index=["Tutor","Code Helper","Motivator"].index(st.session_state.assistant_mode) if st.session_state.assistant_mode in ["Tutor","Code Helper","Motivator"] else 0)
     st.session_state.use_memory = st.checkbox("Use short-term memory", value=st.session_state.use_memory)
     st.session_state.use_tts = st.checkbox("Enable TTS (gTTS)", value=st.session_state.use_tts)
     st.session_state.enable_code_exec = st.checkbox("Enable Code Execution (unsafe)", value=st.session_state.enable_code_exec)
-    st.markdown("Optional: connect to LLM provider (keys via secrets/env recommended).")
-    provider = st.selectbox("Provider:", ["None","OpenAI","DeepSeek"], index=0)
+    st.markdown("---")
+    st.markdown("**Provider (optional)**")
+    provider = st.selectbox("Provider", ["None", "OpenAI", "DeepSeek"], index=0)
     if provider != "None":
         st.session_state.api_provider = provider
         if provider == "OpenAI":
-            st.session_state.api_key = st.text_input("OpenAI API Key (paste here)", type="password")
+            st.session_state.api_key = st.text_input("OpenAI API Key (optional)", type="password")
         elif provider == "DeepSeek":
-            st.session_state.deepseek_key = st.text_input("DeepSeek API Key (paste here)", type="password")
+            st.session_state.deepseek_key = st.text_input("DeepSeek API Key (optional)", type="password")
     else:
         st.session_state.api_provider = None
-        st.session_state.api_key = None
-        st.session_state.deepseek_key = None
     st.markdown("---")
     if st.button("Save App State (local)"):
         ok = save_state_local()
@@ -369,19 +288,65 @@ with st.sidebar:
         if ok:
             st.success("Loaded local state.")
     st.markdown("Keys: use `.streamlit/secrets.toml` or env vars `DEEPSEEK_API_KEY`, `OPENAI_API_KEY`.")
+    st.markdown("---")
+    st.caption("Moscifer • CSE Mentor — Built 2025")
+
+# ------------------ Utility: pretty multi-color donut ------------------
+def multicolor_donut(value, size=260, title=None, colors=None, show_center=True):
+    # colors: list of color hex; if not provided use rainbow
+    if colors is None:
+        colors = ["#00FFB2","#00A3FF","#A100FF","#FF3FA0","#FFB84D"]
+    # create slices: one slice for value and one remainder; then overlay gradient-like ring using multiple thin annular traces
+    fig = go.Figure()
+
+    # We'll build a single donut with gradient-ish effect using multiple concentric pie rings (visual trick)
+    # Outer ring (decorative)
+    fig.add_trace(go.Pie(values=[value, 100-value], hole=0.72,
+                         marker=dict(colors=[colors[0], 'rgba(0,0,0,0)']),
+                         textinfo='none', sort=False, direction='clockwise', hoverinfo='none', showlegend=False))
+    # Middle ring with blended color
+    fig.add_trace(go.Pie(values=[value, 100-value], hole=0.58,
+                         marker=dict(colors=[colors[1], 'rgba(0,0,0,0)']),
+                         textinfo='none', sort=False, hoverinfo='none', showlegend=False))
+    # Inner ring (accent)
+    fig.add_trace(go.Pie(values=[value, 100-value], hole=0.40,
+                         marker=dict(colors=[colors[2], 'rgba(0,0,0,0)']),
+                         textinfo='none', sort=False, hoverinfo='none', showlegend=False))
+
+    # layout
+    fig.update_layout(
+        margin=dict(t=10,b=10,l=10,r=10),
+        height=size, width=size,
+        paper_bgcolor='rgba(0,0,0,0)',
+        annotations=[dict(text=f"<span style='font-size:30px;font-weight:700;color:#ffffff'>{value}%</span><br><span style='font-size:10px;color:#bfffc2'>{title or ''}</span>",
+                          x=0.5, y=0.5, showarrow=False, font=dict(size=14))] if show_center else []
+    )
+    fig.update_traces(rotation=90)
+    return fig
+
+# ------------------ Floating Manage button (UI only) ------------------
+manage_button = st.empty()
 
 # ------------------ Dashboard Page ------------------
 if page == "🏠 Dashboard":
-    st.title("📚Learning Path")
-    st.markdown("<div class='card'>Fusion of learning, AI mentor, and creative Spectorial mode. Track progress, ask the AI, take quizzes, run code .</div>", unsafe_allow_html=True)
+    # header
+    col_title, col_spacer = st.columns([8,2])
+    with col_title:
+        st.markdown("<div class='neon-header'>🎓 CSE Learning Path Dashboard — AI Mentor (Pro)</div>", unsafe_allow_html=True)
+        st.markdown("<div class='small-muted'>Track progress, use the AI mentor, preserve notes & reflect with Spectorial mode.</div>", unsafe_allow_html=True)
+    st.markdown("---")
 
-    # top metrics
-    c1,c2,c3 = st.columns([1.2,1,1])
+    # top metrics row
+    c1, c2, c3 = st.columns([1.6,1,1])
+    overall = int(st.session_state.courses["Completion"].mean())
     with c1:
-        overall = int(st.session_state.courses["Completion"].mean())
-        fig = go.Figure(go.Indicator(mode="gauge+number", value=overall, title={'text':"Total Completion"}, gauge={'axis':{'range':[0,100]}, 'bar':{'color':'#00FF7F'}}))
-        fig.update_layout(height=240, paper_bgcolor='rgba(0,0,0,0)', font_color='#bfffc2')
-        st.plotly_chart(fig, use_container_width=True)
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
+        st.markdown("<div style='display:flex; align-items:center; gap:14px;'>", unsafe_allow_html=True)
+        # big donut
+        donut_fig = multicolor_donut(overall, size=260, title="Total Completion", colors=["#00ffb2","#00d1ff","#9a6bff"])
+        st.plotly_chart(donut_fig, use_container_width=False, config={"displayModeBar": False})
+        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
     with c2:
         st.metric("Courses", len(st.session_state.courses))
         st.metric("Active Topic", value=(st.session_state.topic_memory or "—"))
@@ -402,98 +367,121 @@ if page == "🏠 Dashboard":
 
     st.markdown("---")
 
-    # weekly progress
+    # Weekly progress with four donuts
     st.subheader("📆 Weekly Progress")
-    weeks = [f"Week {i+1}" for i in range(4)]
-    cols = st.columns(len(weeks))
-    week_vals=[]
-    for i,col in enumerate(cols):
-        v = col.slider(weeks[i],0,100,int(np.clip((st.session_state.courses["Completion"].mean()+(i-1)*5),0,100)))
-        week_vals.append(v)
-    b = go.Figure(go.Bar(x=weeks, y=week_vals, text=week_vals, textposition='auto'))
-    b.update_layout(height=320, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-    st.plotly_chart(b, use_container_width=True)
+    weeks = ["Week 1","Week 2","Week 3","Week 4"]
+    # create pseudo-values for weekly donuts (closer to image)
+    wvals = [int(np.clip(overall - 5*i + random.randint(-3,6), 6, 96)) for i in range(4)]
+    wcols = st.columns(4)
+    for i, col in enumerate(wcols):
+        with col:
+            figw = multicolor_donut(wvals[i], size=180, title=f"{weeks[i]}")
+            st.plotly_chart(figw, use_container_width=True, config={"displayModeBar": False})
 
     st.markdown("---")
 
-    # courses list with smart actions
-    st.subheader("📚 Courses & Actions")
-    search = st.text_input("Search courses (name/status)")
-    df = st.session_state.courses.copy()
-    if search:
-        mask = df["Course"].str.contains(search, case=False, na=False) | df["Status"].str.contains(search, case=False, na=False)
-        df = df[mask]
-    for idx,row in df.reset_index(drop=False).iterrows():
-        col1,col2,col3 = st.columns([3,1,1])
-        with col1:
-            st.markdown(f"<div class='card'><b>{row['Course']}</b> — <small>{row['Status']}</small><br>Completion: {row['Completion']}%</div>", unsafe_allow_html=True)
-        with col2:
-            new = st.slider(f"prog_{row['index']}",0,100,int(row['Completion']))
+    # Courses & actions area
+    st.subheader("📚 Courses & AI Actions")
+    st.markdown("<div class='card'>", unsafe_allow_html=True)
+    grid_cols = st.columns([3,1,1])
+    # left column: course list summary
+    left = grid_cols[0]
+    mid = grid_cols[1]
+    right = grid_cols[2]
+    with left:
+        # a subtle search bar
+        search = st.text_input("Search courses (name/status)")
+        df = st.session_state.courses.copy()
+        if search:
+            mask = df["Course"].str.contains(search, case=False, na=False) | df["Status"].str.contains(search, case=False, na=False)
+            df = df[mask]
+        # show compact course cards
+        for idx, row in df.iterrows():
+            st.markdown(f"<div class='small-card'><b style='color:#bfffc2'>{row['Course']}</b> — <small style='color:#8fffbf'>{row['Status']}</small><div style='margin-top:6px;color:#9fffd2'>Completion: {int(row['Completion'])}%</div></div>", unsafe_allow_html=True)
+
+    # middle: showcase three big donuts summarizing top courses (mimicking image)
+    with mid:
+        # take top three course completions
+        top3 = st.session_state.courses.sort_values("Completion", ascending=False).head(3)
+        for _, r in top3.iterrows():
+            f = multicolor_donut(int(r['Completion']), size=130, title=r['Course'], colors=["#00ffb2","#00d1ff","#ff6bcb"])
+            st.plotly_chart(f, use_container_width=True, config={"displayModeBar": False})
+
+    # right column: sliders and actions
+    with right:
+        st.markdown("<div style='padding:6px 0'>Quick actions</div>", unsafe_allow_html=True)
+        # iterate and create sliders for each course (compact)
+        for i, row in st.session_state.courses.reset_index().iterrows():
+            label = f"{row['Course']} ({int(row['Completion'])}%)"
+            new = st.slider(label, 0, 100, int(row['Completion']), key=f"slider_{i}", help="Adjust progress",)
             if new != int(row['Completion']):
-                st.session_state.courses.at[row['index'],'Completion']=int(new)
-                st.session_state.courses.at[row['index'],'Status']= 'Completed' if new==100 else ('Not Started' if new==0 else 'In Progress')
+                st.session_state.courses.at[row['index'], 'Completion'] = int(new)
+                st.session_state.courses.at[row['index'], 'Status'] = 'Completed' if new==100 else ('Not Started' if new==0 else 'In Progress')
                 save_state_local()
                 st.experimental_rerun()
-        with col3:
-            if st.button(f"Ask AI about {row['Course']}", key=f"ask_{row['index']}"):
+            # small AI action
+            if st.button("Ask AI", key=f"ask_ai_{i}"):
                 prompt = f"Give a short study plan for {row['Course']} at {row['Completion']}% completion."
                 st.session_state.chat_history.append({"sender":"user","message":prompt,"ts":now_iso()})
-                reply = generate_bot_reply(prompt, mode=st.session_state.assistant_mode)
+                reply = simulated_llm_reply(prompt, mode=st.session_state.assistant_mode)
                 st.session_state.chat_history.append({"sender":"bot","message":reply,"ts":now_iso()})
                 if st.session_state.use_tts and TTS_AVAILABLE:
-                    audio = tts_speak(reply)
+                    audio = tts_speak_bytes(reply)
                     if audio:
                         st.audio(audio, format='audio/mp3')
                 save_state_local()
                 st.experimental_rerun()
 
+    st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("---")
 
-    # table + export
+    # Detailed table
     st.subheader("📈 Detailed Course Progress")
     try:
         st.dataframe(st.session_state.courses.style.format({'Completion':'{:.0f}'}), use_container_width=True)
     except Exception:
         st.dataframe(st.session_state.courses, use_container_width=True)
 
-    dl1,dl2 = st.columns([1,1])
+    # export buttons
+    dl1, dl2 = st.columns(2)
     with dl1:
-        if st.button("Export CSV"):
-            csv = st.session_state.courses.to_csv(index=False).encode("utf-8")
-            st.download_button("⬇️ Download CSV", data=csv, file_name="courses.csv", mime="text/csv")
+        csv = st.session_state.courses.to_csv(index=False).encode("utf-8")
+        st.download_button("⬇️ Export CSV", data=csv, file_name="courses.csv", mime="text/csv")
     with dl2:
-        if st.button("Export JSON"):
-            j = st.session_state.courses.to_json(orient="records", indent=2).encode("utf-8")
-            st.download_button("⬇️ Download JSON", data=j, file_name="courses.json", mime="application/json")
+        j = st.session_state.courses.to_json(orient="records", indent=2).encode("utf-8")
+        st.download_button("⬇️ Export JSON", data=j, file_name="courses.json", mime="application/json")
 
     st.markdown("---")
     st.markdown("<div style='color:#bfffc2'>Developed by Anish • AI Mentor (Ultimate) © 2025</div>", unsafe_allow_html=True)
 
+    # floating manage app button
+    st.markdown("<button class='manage-floating'>⚙️ Manage app</button>", unsafe_allow_html=True)
+
+
 # ------------------ AI Mentor Page ------------------
 elif page == "🤖 AI Mentor":
-    st.markdown("<h2 class='neon-header'>🤖 AI Mentor</h2>", unsafe_allow_html=True)
+    st.markdown("<div class='neon-header'>🤖 AI Mentor</div>", unsafe_allow_html=True)
     st.markdown("<div class='card'>Ask the mentor, choose modes, and use quick actions. Offline fallback active if no API is configured.</div>", unsafe_allow_html=True)
-
-    # quick starters
+    st.markdown("")
     q1,q2,q3,q4 = st.columns(4)
-    if q1.button("💪 Motivate Me"): 
+    if q1.button("💪 Motivate Me"):
         st.session_state.chat_history.append({"sender":"user","message":"motivate me","ts":now_iso()})
-        r = generate_bot_reply("motivate me", mode="Motivator")
+        r = simulated_llm_reply("motivate me", mode="Motivator")
         st.session_state.chat_history.append({"sender":"bot","message":r,"ts":now_iso()})
         save_state_local(); st.experimental_rerun()
     if q2.button("🐍 Python Tip"):
         st.session_state.chat_history.append({"sender":"user","message":"tell me about python","ts":now_iso()})
-        r = generate_bot_reply("tell me about python", mode="Tutor")
+        r = simulated_llm_reply("tell me about python", mode="Tutor")
         st.session_state.chat_history.append({"sender":"bot","message":r,"ts":now_iso()})
         save_state_local(); st.experimental_rerun()
     if q3.button("🧠 AI Info"):
         st.session_state.chat_history.append({"sender":"user","message":"tell me about ai","ts":now_iso()})
-        r = generate_bot_reply("tell me about ai", mode="Tutor")
+        r = simulated_llm_reply("tell me about ai", mode="Tutor")
         st.session_state.chat_history.append({"sender":"bot","message":r,"ts":now_iso()})
         save_state_local(); st.experimental_rerun()
     if q4.button("🌐 Web Help"):
         st.session_state.chat_history.append({"sender":"user","message":"help with web dev","ts":now_iso()})
-        r = generate_bot_reply("help with web dev", mode="Tutor")
+        r = simulated_llm_reply("help with web dev", mode="Tutor")
         st.session_state.chat_history.append({"sender":"bot","message":r,"ts":now_iso()})
         save_state_local(); st.experimental_rerun()
 
@@ -502,14 +490,14 @@ elif page == "🤖 AI Mentor":
         st.session_state.chat_history=[]; st.session_state.topic_memory=None; st.session_state.chat_summary=None
         save_state_local(); st.success("Cleared chat.")
 
-    # chat area
-    st.markdown("<div class='chat-area'>", unsafe_allow_html=True)
+    # Chat area
+    st.markdown("<div class='card'>", unsafe_allow_html=True)
     if st.session_state.chat_summary and st.session_state.use_memory:
         st.markdown(f"<div class='memory-badge'>🧠 Memory: {st.session_state.chat_summary}</div>", unsafe_allow_html=True)
     for m in st.session_state.chat_history:
-        sender=m.get("sender"); msg=m.get("message"); ts=m.get("ts")
+        sender = m.get("sender"); msg = m.get("message"); ts = m.get("ts")
         tstr = pd.Timestamp(ts).strftime("%Y-%m-%d %H:%M:%S UTC")
-        if sender=="user":
+        if sender == "user":
             st.markdown(f"<div style='text-align:right'><div class='bubble-user'><b>You:</b> {msg}</div><div class='small-muted' style='text-align:right'>{tstr}</div></div>", unsafe_allow_html=True)
         else:
             st.markdown(f"<div style='text-align:left'><div class='bubble-bot'><b>Assistant:</b> {msg}</div><div class='small-muted'>{tstr}</div></div>", unsafe_allow_html=True)
@@ -517,17 +505,18 @@ elif page == "🤖 AI Mentor":
         st.markdown("<div class='small-muted'>Assistant is typing...</div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # input form
+    # input
     with st.form("chat_form", clear_on_submit=True):
         user_text = st.text_input("Ask the AI mentor (type 'bye' to clear memory)")
         submitted = st.form_submit_button("Send")
         if submitted and user_text and user_text.strip():
             st.session_state.chat_history.append({"sender":"user","message":user_text.strip(),"ts":now_iso()})
-            reply = generate_bot_reply(user_text.strip(), mode=st.session_state.assistant_mode)
+            reply = simulated_llm_reply(user_text.strip(), mode=st.session_state.assistant_mode)
             st.session_state.chat_history.append({"sender":"bot","message":reply,"ts":now_iso()})
             if st.session_state.use_tts and TTS_AVAILABLE:
-                audio = tts_speak(reply)
-                if audio: st.audio(audio, format='audio/mp3')
+                audio = tts_speak_bytes(reply)
+                if audio:
+                    st.audio(audio, format='audio/mp3')
             if st.session_state.use_memory:
                 st.session_state.chat_summary = summarize_memory()
             save_state_local()
@@ -544,7 +533,7 @@ elif page == "🤖 AI Mentor":
 
 # ------------------ Notes Page ------------------
 elif page == "📝 Notes":
-    st.markdown("<h2 class='neon-header'>📝 Notes</h2>", unsafe_allow_html=True)
+    st.markdown("<div class='neon-header'>📝 Notes</div>", unsafe_allow_html=True)
     st.markdown("<div class='card'>Quick note-taking. Notes persist to local JSON.</div>", unsafe_allow_html=True)
     with st.form("note_form", clear_on_submit=True):
         title = st.text_input("Title")
@@ -554,39 +543,37 @@ elif page == "📝 Notes":
             st.session_state.notes.append({"title":title,"body":body,"ts":now_iso()})
             save_state_local(); st.success("Note saved."); st.experimental_rerun()
     if st.session_state.notes:
-        for i,n in enumerate(reversed(st.session_state.notes)):
+        for n in reversed(st.session_state.notes[-30:]):
             st.markdown(f"**{n['title']}** — <span class='small-muted'>{n['ts']}</span>", unsafe_allow_html=True)
-            st.write(n['body'])
-            st.markdown("---")
+            st.write(n['body']); st.markdown("---")
     else:
         st.info("No notes yet.")
 
 # ------------------ Quizzes Page ------------------
 elif page == "🧪 Quizzes":
-    st.markdown("<h2 class='neon-header'>🧪 Quizzes</h2>", unsafe_allow_html=True)
+    st.markdown("<div class='neon-header'>🧪 Quizzes</div>", unsafe_allow_html=True)
     st.markdown("<div class='card'>Short quizzes are generated from your courses. Try one and save your score.</div>", unsafe_allow_html=True)
     top_course = st.session_state.courses.loc[st.session_state.courses['Completion'].idxmax()]['Course']
     st.markdown(f"**Suggested course for quiz:** {top_course}")
     if st.button("Generate 3-question quiz"):
-        # simple fixed templates (you can expand)
         quiz = [
             {"q":f"What is a common data structure used in {top_course} to implement FIFO?", "a":"queue"},
-            {"q":f"In {top_course}, which keyword defines a function in Python?", "a":"def"},
+            {"q":f"In Python, which keyword defines a function?", "a":"def"},
             {"q":f"What complexity (big-O) is average-case for binary search?", "a":"logarithmic"}
         ]
         st.session_state.current_quiz = quiz
         st.experimental_rerun()
     if st.session_state.get("current_quiz"):
         answers = []
-        for i,qa in enumerate(st.session_state.current_quiz):
+        for i, qa in enumerate(st.session_state.current_quiz):
             ans = st.text_input(f"Q{i+1}: {qa['q']}", key=f"quiz_in_{i}")
             answers.append(ans)
         if st.button("Submit Quiz"):
-            score=0
-            for i,qa in enumerate(st.session_state.current_quiz):
+            score = 0
+            for i, qa in enumerate(st.session_state.current_quiz):
                 if answers[i] and qa['a'] in answers[i].lower():
-                    score+=1
-            st.session_state.quiz_scores[top_course]=st.session_state.quiz_scores.get(top_course,[])+[{"score":score,"ts":now_iso()}]
+                    score += 1
+            st.session_state.quiz_scores[top_course] = st.session_state.quiz_scores.get(top_course, []) + [{"score": score, "ts": now_iso()}]
             save_state_local()
             st.success(f"Score: {score}/{len(st.session_state.current_quiz)}")
             del st.session_state.current_quiz
@@ -597,10 +584,10 @@ elif page == "🧪 Quizzes":
 
 # ------------------ Code Runner Page ------------------
 elif page == "🧪 Code Runner":
-    st.markdown("<h2 class='neon-header'>🧪 Code Runner</h2>", unsafe_allow_html=True)
+    st.markdown("<div class='neon-header'>🧪 Code Runner</div>", unsafe_allow_html=True)
     st.markdown("<div class='card'>Run short Python snippets on this machine. ⚠️ Enable only in trusted environments.</div>", unsafe_allow_html=True)
-    st.markdown("**Enable execution toggle** in sidebar to run code.")
-    code = st.text_area("Enter Python code", value='print(\"Hello, world!\")', height=200)
+    st.markdown("**Enable execution toggle** in the sidebar to run code.")
+    code = st.text_area("Enter Python code", value='print(\"Hello, world!\")', height=220)
     if st.session_state.enable_code_exec:
         if st.button("Run (5s timeout)"):
             out, err, to = run_code_snippet(code, timeout=5)
@@ -612,22 +599,22 @@ elif page == "🧪 Code Runner":
                 if err:
                     st.error(err)
     else:
-        st.info("Code execution is disabled. Please toggle 'Enable Code Execution' in the sidebar if you understand the risks.")
+        st.info("Code execution is disabled. Toggle 'Enable Code Execution' in the sidebar to run (unsafe).")
 
 # ------------------ Spectorial Mode ------------------
 elif page == "🌌 Spectorial":
-    st.markdown("<h2 class='neon-header'>🌌 Spectorial Mode</h2>", unsafe_allow_html=True)
-    st.markdown("<div class='card'>A reflective journaling and creativity interface inspired by 'Spectorial Consciousness'. Use prompts to explore ideas.</div>", unsafe_allow_html=True)
+    st.markdown("<div class='neon-header'>🌌 Spectorial Mode</div>", unsafe_allow_html=True)
+    st.markdown("<div class='card'>A reflective journaling and creativity interface inspired by 'Spectorial Consciousness'.</div>", unsafe_allow_html=True)
     prompt = st.selectbox("Prompt", ["Free write","What did I learn today?","Ideas for a creative project","What meaning did I find in my studies?"])
-    entry = st.text_area("Write your reflective entry here", height=240)
+    entry = st.text_area("Write your reflective entry here", height=260)
     if st.button("Save Entry"):
         st.session_state.spectorial_entries.append({"prompt":prompt,"entry":entry,"ts":now_iso()})
         save_state_local(); st.success("Saved.")
     if st.session_state.spectorial_entries:
         st.markdown("### Past Entries")
-        for e in reversed(st.session_state.spectorial_entries[-10:]):
+        for e in reversed(st.session_state.spectorial_entries[-15:]):
             st.markdown(f"**{e['prompt']}** — <span class='small-muted'>{e['ts']}</span>", unsafe_allow_html=True)
             st.write(e['entry']); st.markdown("---")
 
 # ------------------ Footer ------------------
-st.markdown("<div style='text-align:center; color:#bfffc2; margin-top:20px'>Moscifer • CSE Mentor — Built 2025</div>", unsafe_allow_html=True)
+st.markdown("<div style='text-align:center; color:#bfffc2; margin-top:18px'>Moscifer • CSE Mentor — Built 2025</div>", unsafe_allow_html=True)
