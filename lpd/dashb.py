@@ -372,7 +372,7 @@ with st.sidebar:
 
 # ------------------ Dashboard Page ------------------
 if page == "🏠 Dashboard":
-    st.title("🧠 CSE Learning Path — Ultimate")
+    st.title("📚Learning Path")
     st.markdown("<div class='card'>Fusion of learning, AI mentor, and creative Spectorial mode. Track progress, ask the AI, take quizzes, run code (if enabled).</div>", unsafe_allow_html=True)
 
     # top metrics
