@@ -20,7 +20,7 @@ import plotly.graph_objects as go
 import requests
 
 # ------------------ PAGE CONFIG ------------------
-st.set_page_config(page_title="CSE Learning Path Dashboard — AI Mentor (Pro)", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Learning Path Dashboard", layout="wide", initial_sidebar_state="expanded")
 
 # ------------------ Persistence ------------------
 PERSIST_FILE = "cse_dashboard_state.json"
